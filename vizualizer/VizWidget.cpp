@@ -128,7 +128,6 @@ int VizWidget::VizDraw::Draw(mglGraph* gr){
 	gr->SubPlot(1,1,0,"");
 	gr->Box();
 	if(vizWidget->_fileLoaded){
-		std::cout << "a" << std::endl;
 		int frame = vizWidget->_curFrame;
 		auto a = vizWidget->_frames[frame].first;
 		auto b = vizWidget->_frames[frame].second;
@@ -144,9 +143,9 @@ void VizWidget::sliderMoved(int val) {
 }
 
 void VizWidget::playEvent(){
-	int skip = _frames.size() / 200;
+	int skip = _frames.size() / 500;
 	if(_curFrame + skip < _frames.size())
-		nextFrame();
+		nextFrame(skip);
 	else
 		_playTimer.stop();
 }
@@ -162,7 +161,7 @@ void VizWidget::renderEvent(){
 }
 
 void VizWidget::playReleased(){
-	_playTimer.start(100);
+	_playTimer.start(500);
 }
 
 void VizWidget::pauseReleased(){
