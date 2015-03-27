@@ -4,6 +4,9 @@
 
 QMAKE_CXXFLAGS += -std=gnu++14
 
+QMAKE_CXXFLAGS_DEBUG += -pg
+QMAKE_LFLAGS_DEBUG += -pg
+
 INCLUDEPATH += /usr/local/include
 LIBS        += -L/usr/local/libs -lmgl2-qt5 -lmgl2 
 
