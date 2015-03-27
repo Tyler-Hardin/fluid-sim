@@ -16,7 +16,7 @@ DEPENDPATH += .
 INCLUDEPATH += .
 
 #CONFIG += debug
-QT += widgets
+QT += widgets opengl
 
 QMAKE_CXX = clang++-3.7
 
