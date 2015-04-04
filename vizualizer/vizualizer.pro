@@ -16,10 +16,10 @@ DEPENDPATH += .
 INCLUDEPATH += .
 
 #CONFIG += debug
-QT += widgets opengl
+QT += widgets gui opengl
 
 QMAKE_CXX = clang++-3.7
 
 # Input
-SOURCES += main.cpp MainWindow.cpp VizWidget.cpp
-HEADERS += MainWindow.hpp VizWidget.hpp
+SOURCES += main.cpp MainWindow.cpp VizWidget.cpp VecFieldWidget.cpp
+HEADERS += MainWindow.hpp VizWidget.hpp VecFieldWidget.hpp
