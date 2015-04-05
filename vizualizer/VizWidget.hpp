@@ -1,6 +1,8 @@
 #ifndef VIZ_WIDGET_HPP
 #define VIZ_WIDGET_HPP
 
+#include "VecFieldWidget.hpp"
+
 #include <QString>
 #include <QPair>
 #include <QSlider>
@@ -14,13 +16,7 @@
 class VizWidget : public QWidget {
 	Q_OBJECT
 	
-	struct VizDraw : public mglDraw {
-		VizDraw(VizWidget* t) : vizWidget(t) {}
-		int Draw(mglGraph* gr);
-		
-	private:
-		VizWidget* vizWidget;
-	} draw{this};
+	VecFieldWidget* _vecWidget;
 	
 	bool _changed = true;
 	bool _fileLoaded = false;
@@ -32,9 +28,8 @@ class VizWidget : public QWidget {
 	QTimer _playTimer;
 	QTimer _renderTimer;
 	
-	QMathGL* _mgl;
 	QSlider* _slider;
-	QVector<QPair<mglData, mglData>> _frames;
+	QVector<QPair<QVector<float>, QVector<float>>> _frames;
 	
 public:
 	VizWidget(QWidget* parent = nullptr);
@@ -49,7 +44,6 @@ private slots:
 	void playReleased();
 	void pauseReleased();
 	void playEvent();
-	void renderEvent();
 	void sliderMoved(int);
 };
 
