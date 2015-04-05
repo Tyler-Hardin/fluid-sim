@@ -1,5 +1,6 @@
 #include "VecFieldWidget.hpp"
 
+#include <cmath>
 #include <iostream>
 
 VecFieldWidget::VecFieldWidget(QWidget* parent) : QGLWidget(parent) {
@@ -51,8 +52,10 @@ static void square(float x, float y, float w, float h){
 }
 
 static void arrow(float x, float y, float u, float v){
+	glBegin(GL_LINES);
 	glVertex2f(x,y);
 	glVertex2f(x+u,y+v);
+	glEnd();
 }
 
 void VecFieldWidget::draw(){
@@ -60,21 +63,30 @@ void VecFieldWidget::draw(){
 	constexpr float maxx =  2;
 	constexpr float miny = -2;
 	constexpr float maxy =  2;
+	constexpr float scale = .1;
 	
 	if(_u == nullptr || _v == nullptr)
 		return;
 	
+	QVector<float> lengths;
+	lengths.resize(_height * _width);
+	
+	for(int i = 0;i < _height * _width;i++){
+		float u = _u->at(i);
+		float v = _v->at(i);
+		lengths[i] = std::sqrt(u*u + v*v);
+	}
+	
     qglColor(Qt::gray);
-	glBegin(GL_LINES);
 	int i = 0;
-	for(int xi = 0;xi < _width;xi++){
-		for(int yi = 0;yi < _height;yi++, i++){
+	for(int yi = 0;yi < _height;yi++){
+		for(int xi = 0;xi < _width;xi++){
 			float x = minx + (maxx - minx) / _width  * xi;
 			float y = miny + (maxy - miny) / _height * yi;
-			arrow(x, y, _u->at(i) / 2, _v->at(i) / 2);
+			arrow(x, y, scale * _u->at(i) / lengths[i], scale * _v->at(i) / lengths[i]);
+			i++;
 		}
 	}
-	glEnd();
 }
 
 void VecFieldWidget::setData(int height, int width, 

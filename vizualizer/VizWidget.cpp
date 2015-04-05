@@ -90,7 +90,6 @@ void VizWidget::nextFrame(int skip){
 
 void VizWidget::setFrame(int i){
 	_curFrame = i;
-	_changed = true;
 	_slider->setValue(i);
 	
 	_vecWidget->setData(_height, _width, _frames[i].first, _frames[i].second);
