@@ -39,6 +39,9 @@ public:
 	
 	/**
 	 * Scales viewport when window is resized.
+	 * 
+	 * @param width		the width in pixels of the new viewport
+	 * @param height	the height in pixels of the new viewport
 	 */
 	void resizeGL(int width, int height);
 	
@@ -49,6 +52,11 @@ public:
 	
 	/**
 	 * Sets the data to use for drawing.
+	 * 
+	 * @param height	the height of the vector field 2D array
+	 * @param width		the width of the vector field 2D array
+	 * @param u			the horizontal components of the vector field
+	 * @param v			the vertical components of the vector field
 	 */
 	void setData(int height, int width, const QVector<float>& u, const QVector<float>& v);
 };
