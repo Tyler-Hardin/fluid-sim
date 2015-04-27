@@ -15,13 +15,12 @@ QSize VecFieldWidget::sizeHint() const
 
 void VecFieldWidget::initializeGL()
 {
-    qglClearColor(Qt::black);
-
+    qglClearColor(Qt::white);
 }
 
 void VecFieldWidget::paintGL()
 {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
     glTranslatef(0.0, 0.0, -10.0);
     draw();
@@ -30,15 +29,23 @@ void VecFieldWidget::paintGL()
 void VecFieldWidget::resizeGL(int width, int height)
 {
     int side = qMin(width, height);
+    std::cout << width << std::endl;
     glViewport((width - side) / 2, (height - side) / 2, side, side);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-#ifdef QT_OPENGL_ES_1
-    glOrthof(-2, +2, -2, +2, 1.0, 15.0);
-#else
-    glOrtho(-2, +2, -2, +2, 1.0, 15.0);
-#endif
+    
+	float range_x = 2;
+	float range_y = 2;
+	
+//	if(_width > _height){
+//		range_y *= ((float)_height / _width);
+//	}
+//	else{
+//		range_x *= ((float)_width / _height);
+//	}
+	
+    glOrtho(-range_x, range_x, -range_y, range_y, 1.0, 15.0);
     glMatrixMode(GL_MODELVIEW);
 }
 
@@ -51,18 +58,49 @@ static void square(float x, float y, float w, float h){
     glEnd();
 }
 
-static void arrow(float x, float y, float u, float v){
-	glBegin(GL_LINES);
+static void circle(float x, float y, float r){
+	constexpr int triangles = 10;
+	glBegin(GL_TRIANGLE_STRIP);
 	glVertex2f(x,y);
-	glVertex2f(x+u,y+v);
+	for(int i = 0;i <= triangles;i++){
+		glVertex2f(x + r * cos(2 * M_PI / triangles * i),y + r * sin(2 * M_PI / triangles * i));
+	}
 	glEnd();
 }
 
+static void arrow(float x, float y, float u, float v, float s = .25){
+	glBegin(GL_LINES);
+		glVertex2f(x,y);
+		glVertex2f(x+u*(1-s),y+v*(1-s));
+	glEnd();
+	
+	glBegin(GL_TRIANGLES);
+		glVertex2f(x + u, y + v);
+		glVertex2f(x+u*(1-s) + v*s, y+v*(1-s) - u*s);
+		glVertex2f(x+u*(1-s) - v*s, y+v*(1-s) + u*s);
+	glEnd();
+	
+	//circle(x+u, y+v, .025);
+}
+
 void VecFieldWidget::draw(){
-	constexpr float minx = -2;
-	constexpr float maxx =  2;
-	constexpr float miny = -2;
-	constexpr float maxy =  2;
+	float minx = -1.95;
+	float maxx =  1.95;
+	float miny = -1.95;
+	float maxy =  1.95;
+	
+	if(_width > _height){
+		maxy = maxy * ((float)_height / _width);
+		miny = miny * ((float)_height / _width);
+	}
+	else{
+		maxx = maxx * ((float)_width / _height);
+		minx = minx * ((float)_width / _height);
+	}
+	
+	float stepx = (maxx - minx) / _width;
+	float stepy = (maxy - miny) / _height;
+	
 	constexpr float scale = .1;
 	
 	if(_u == nullptr || _v == nullptr)
@@ -71,28 +109,69 @@ void VecFieldWidget::draw(){
 	QVector<float> lengths;
 	lengths.resize(_height * _width);
 	
+	float max_len;
+	float min_len;
 	for(int i = 0;i < _height * _width;i++){
 		float u = _u->at(i);
 		float v = _v->at(i);
-		lengths[i] = std::sqrt(u*u + v*v);
+		float len = std::sqrt(u*u + v*v);
+		lengths[i] = len;
+		
+		if(i == 0){
+			max_len = len;
+			min_len = len;
+		}
+		else if(len > max_len){
+			max_len = len;
+		}
+		else if(len < min_len){
+			min_len = len;
+		}
 	}
 	
-    qglColor(Qt::gray);
 	int i = 0;
 	for(int yi = 0;yi < _height;yi++){
 		for(int xi = 0;xi < _width;xi++){
-			float x = minx + (maxx - minx) / _width  * xi;
-			float y = miny + (maxy - miny) / _height * yi;
-			arrow(x, y, scale * _u->at(i) / lengths[i], scale * _v->at(i) / lengths[i]);
+			float x = minx + stepx  * xi + stepx / 2;
+			float y = miny + stepy  * yi + stepy / 2;
+			float len = lengths[i];
+			
+			
+    		if(!_barriers->at(i)){
+				int hue = 240 - len / max_len * 240;
+				qglColor(QColor::fromHsv(hue, 240, 128));
+				square(x, y, stepx, stepy);
+			}
+			else{
+				qglColor(Qt::gray);
+				square(x, y, stepx, stepy);
+			}
+			i++;
+		}
+	}
+	
+	i = 0;
+	qglColor(Qt::black);
+	for(int yi = 0;yi < _height;yi++){
+		for(int xi = 0;xi < _width;xi++){
+			float x = minx + stepx  * xi + stepx / 2;
+			float y = miny + stepy  * yi + stepy / 2;
+			float len = lengths[i];
+			
+    		if(!_barriers->at(i)){
+				arrow(x, y, scale * _u->at(i) / len, scale * _v->at(i) / len);
+			}
 			i++;
 		}
 	}
 }
 
-void VecFieldWidget::setData(int height, int width, 
+void VecFieldWidget::setData(int height, int width, const QVector<bool>& barriers, 
 	const QVector<float>& u, const QVector<float>& v){
 	_height = height;
 	_width = width;
+	
+	_barriers = &barriers;
 	_u = &u;
 	_v = &v;
 }

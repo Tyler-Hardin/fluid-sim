@@ -56,6 +56,15 @@ void VizWidget::loadFile(QString filename){
 	std::cout << _height << std::endl;
 	std::cout << _width << std::endl;
 	
+	unsigned char b;
+	barrier.clear();
+	for(int i = 0;i < _height;i++){
+		for(int j = 0;j < _width;j++){
+			in >> b;
+			barrier.push_back(b);
+		}
+	}
+	
 	QVector<float> u;
 	QVector<float> v;
 	u.resize(_height * _width);
@@ -92,7 +101,7 @@ void VizWidget::setFrame(int i){
 	_curFrame = i;
 	_slider->setValue(i);
 	
-	_vecWidget->setData(_height, _width, _frames[i].first, _frames[i].second);
+	_vecWidget->setData(_height, _width, barrier, _frames[i].first, _frames[i].second);
 	_vecWidget->update();
 }
 

@@ -7,6 +7,8 @@
 
 #include <QGLWidget>
 
+#include <mutex>
+
 /**
  * Widget that draws the vector field.
  */
@@ -16,6 +18,7 @@ class VecFieldWidget : public QGLWidget {
 	int elapsed;
 	
 	int _height = 0, _width = 0;
+	const QVector<bool>* _barriers = nullptr;
 	const QVector<float>* _u = nullptr;
 	const QVector<float>* _v = nullptr;
     
@@ -55,10 +58,12 @@ public:
 	 * 
 	 * @param height	the height of the vector field 2D array
 	 * @param width		the width of the vector field 2D array
+	 * @param barriers	the array of where barriers are
 	 * @param u			the horizontal components of the vector field
 	 * @param v			the vertical components of the vector field
 	 */
-	void setData(int height, int width, const QVector<float>& u, const QVector<float>& v);
+	void setData(int height, int width, const QVector<bool>& barriers,
+		const QVector<float>& u, const QVector<float>& v);
 };
 
 #endif // VEC_FIELD_WIDGET_HPP

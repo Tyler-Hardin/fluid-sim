@@ -29,9 +29,9 @@ class VizWidget : public QWidget {
 	int _curFrame;
 	
 	QTimer _playTimer;
-	QTimer _renderTimer;
 	
 	QSlider* _slider;
+	QVector<bool> barrier;
 	QVector<QPair<QVector<float>, QVector<float>>> _frames;
 	
 public:
