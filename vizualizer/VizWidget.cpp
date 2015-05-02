@@ -14,11 +14,13 @@
 #include <thread>
 
 VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {	
+	// Create slider and attach handler.
 	_slider = new QSlider(Qt::Horizontal);
 	connect(_slider, SIGNAL(sliderMoved(int)), this, SLOT(sliderMoved(int)));
 	
 	_vecWidget = new VecFieldWidget();
 	
+	// Create buttons and attach handlers.
 	auto playButton = new QPushButton("Play");
 	connect(playButton, SIGNAL(released()), this, SLOT(playReleased()));
 	auto pauseButton = new QPushButton("Pause");
@@ -38,44 +40,42 @@ VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	
 	this->setLayout(vbox);
 	
+	// Connect the play timer to the play event handler. The handler is called every time the
+	// timer fires.
 	connect(&_playTimer, SIGNAL(timeout()), this, SLOT(playEvent()));
 }
 
 void VizWidget::loadFile(QString filename){
+	int height, width;
 	QFile file(filename);
 	file.open(QIODevice::ReadOnly);
 	
+	// Clear frame buffer in case a file is already loaded.
 	_frames.clear();
 	
 	QDataStream in(&file);
+	
+	// Input files are in big endian and floats in it are single precision. Notify input stream so
+	// it reads correctly.
 	in.setByteOrder(QDataStream::BigEndian);
 	in.setFloatingPointPrecision(QDataStream::SinglePrecision);
-	in >> _height;
-	in >> _width;
 	
-	std::cout << _height << std::endl;
-	std::cout << _width << std::endl;
+	in >> height;
+	in >> width;
 	
+	// Read barrier data.
 	unsigned char b;
 	barrier.clear();
-	for(int i = 0;i < _height;i++){
-		for(int j = 0;j < _width;j++){
+	for(int i = 0;i < height;i++){
+		for(int j = 0;j < width;j++){
 			in >> b;
 			barrier.push_back(b);
 		}
 	}
 	
-	QVector<float> u;
-	QVector<float> v;
-	u.resize(_height * _width);
-	v.resize(_height * _width);
+	// Read vector fields.
 	while(!in.atEnd()){
-		for(int i = 0;i < _height * _width;i++){
-			in >> u[i];
-			in >> v[i];
-			//std::cout << a.a[i] << "\t" << b.a[i] << std::endl;
-		}
-		_frames.append(qMakePair(u, v));
+		_frames.push_back(VecField::read(in, height, width));
 	}
 	
 	if(_frames.size() > 0){
@@ -92,7 +92,7 @@ int VizWidget::numFrames(){
 }
 
 void VizWidget::nextFrame(int skip){
-	if(_curFrame + skip < _frames.size()){
+	if(_curFrame + skip < (int)_frames.size()){
 		setFrame(_curFrame + skip);
 	}
 }
@@ -101,18 +101,17 @@ void VizWidget::setFrame(int i){
 	_curFrame = i;
 	_slider->setValue(i);
 	
-	_vecWidget->setData(_height, _width, barrier, _frames[i].first, _frames[i].second);
+	_vecWidget->setData(barrier, _frames[i]);
 	_vecWidget->update();
 }
 
 void VizWidget::sliderMoved(int val) {
-	std::cout << "slider moved " << val << std::endl;
 	setFrame(val);
 }
 
 void VizWidget::playEvent(){
 	int skip = _frames.size() / 1000;
-	if(_curFrame + skip < _frames.size())
+	if(_curFrame + skip < (int)_frames.size())
 		nextFrame(skip);
 	else
 		_playTimer.stop();

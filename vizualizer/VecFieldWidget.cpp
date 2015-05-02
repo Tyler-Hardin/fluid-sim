@@ -28,44 +28,40 @@ void VecFieldWidget::paintGL()
 
 void VecFieldWidget::resizeGL(int width, int height)
 {
-    int side = qMin(width, height);
-    std::cout << width << std::endl;
-    glViewport((width - side) / 2, (height - side) / 2, side, side);
+	if(vecField == nullptr)
+		return;
+		
+	float aspect_ratio = (float)vecField->width / vecField->height;
+    
+	range_x = 2;
+	range_y = 2;
+	
+	if((float)width / height >= aspect_ratio){
+		range_x *= ((float)vecField->width / vecField->height);
+		
+    	glViewport(
+    		(width - aspect_ratio * height) / 2, 
+    		0, 
+    		aspect_ratio * height, 
+    		height);
+	}
+	else{
+		range_y *= ((float)vecField->height / vecField->width);
+		
+    	glViewport(
+    		0, 
+    		(height - width / aspect_ratio) / 2, 
+    		width, 
+    		width / aspect_ratio);
+	}
+    
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     
-	float range_x = 2;
-	float range_y = 2;
-	
-//	if(_width > _height){
-//		range_y *= ((float)_height / _width);
-//	}
-//	else{
-//		range_x *= ((float)_width / _height);
-//	}
 	
     glOrtho(-range_x, range_x, -range_y, range_y, 1.0, 15.0);
     glMatrixMode(GL_MODELVIEW);
-}
-
-static void square(float x, float y, float w, float h){
-    glBegin(GL_QUADS);
-        glVertex2f(x-w/2,y-h/2);
-        glVertex2f(x-w/2,y+h/2);
-        glVertex2f(x+w/2,y+h/2);
-        glVertex2f(x+w/2,y-h/2);
-    glEnd();
-}
-
-static void circle(float x, float y, float r){
-	constexpr int triangles = 10;
-	glBegin(GL_TRIANGLE_STRIP);
-	glVertex2f(x,y);
-	for(int i = 0;i <= triangles;i++){
-		glVertex2f(x + r * cos(2 * M_PI / triangles * i),y + r * sin(2 * M_PI / triangles * i));
-	}
-	glEnd();
 }
 
 static void arrow(float x, float y, float u, float v, float s = .25){
@@ -79,41 +75,44 @@ static void arrow(float x, float y, float u, float v, float s = .25){
 		glVertex2f(x+u*(1-s) + v*s, y+v*(1-s) - u*s);
 		glVertex2f(x+u*(1-s) - v*s, y+v*(1-s) + u*s);
 	glEnd();
-	
-	//circle(x+u, y+v, .025);
+}
+
+static void square(float x, float y, float w, float h){
+    glBegin(GL_QUADS);
+        glVertex2f(x-w/2,y-h/2);
+        glVertex2f(x-w/2,y+h/2);
+        glVertex2f(x+w/2,y+h/2);
+        glVertex2f(x+w/2,y-h/2);
+    glEnd();
 }
 
 void VecFieldWidget::draw(){
-	float minx = -1.95;
-	float maxx =  1.95;
-	float miny = -1.95;
-	float maxy =  1.95;
+	// Determine drawing box coordinates.
+	float minx = -range_x;
+	float maxx =  range_x;
+	float miny = -range_y;
+	float maxy =  range_y;
 	
-	if(_width > _height){
-		maxy = maxy * ((float)_height / _width);
-		miny = miny * ((float)_height / _width);
-	}
-	else{
-		maxx = maxx * ((float)_width / _height);
-		minx = minx * ((float)_width / _height);
-	}
-	
-	float stepx = (maxx - minx) / _width;
-	float stepy = (maxy - miny) / _height;
-	
-	constexpr float scale = .1;
-	
-	if(_u == nullptr || _v == nullptr)
+	// Check that the vector field has been set.
+	if(vecField == nullptr)
 		return;
 	
-	QVector<float> lengths;
-	lengths.resize(_height * _width);
+	// Determine the step size of the grid.
+	float stepx = (maxx - minx) / vecField->width;
+	float stepy = (maxy - miny) / vecField->height;
 	
+	// Scale of vectors.
+	constexpr float scale = .1;
+	
+	// Find max and min lengths so we can normalize vector length.
+	// Lengths are also used in speed heat map.
+	QVector<float> lengths;
+	lengths.resize(vecField->height * vecField->width); // Pre-resize vector. This is efficient.
 	float max_len;
 	float min_len;
-	for(int i = 0;i < _height * _width;i++){
-		float u = _u->at(i);
-		float v = _v->at(i);
+	for(int i = 0;i < vecField->height * vecField->width;i++){
+		float u = vecField->u.at(i);
+		float v = vecField->v.at(i);
 		float len = std::sqrt(u*u + v*v);
 		lengths[i] = len;
 		
@@ -129,20 +128,24 @@ void VecFieldWidget::draw(){
 		}
 	}
 	
+	
+	// Draw the heat map.
 	int i = 0;
-	for(int yi = 0;yi < _height;yi++){
-		for(int xi = 0;xi < _width;xi++){
+	for(int yi = 0;yi < vecField->height;yi++){
+		for(int xi = 0;xi < vecField->width;xi++){
 			float x = minx + stepx  * xi + stepx / 2;
 			float y = miny + stepy  * yi + stepy / 2;
 			float len = lengths[i];
 			
 			
-    		if(!_barriers->at(i)){
+    		if(!barriers->at(i)){
+    			// If it's not a barrier, draw a color square.
 				int hue = 240 - len / max_len * 240;
-				qglColor(QColor::fromHsv(hue, 240, 128));
+				qglColor(QColor::fromHsv(hue, 240, 200));
 				square(x, y, stepx, stepy);
 			}
 			else{
+				// If it's a barrier, draw gray.
 				qglColor(Qt::gray);
 				square(x, y, stepx, stepy);
 			}
@@ -150,28 +153,25 @@ void VecFieldWidget::draw(){
 		}
 	}
 	
+	// Draw the vectors.
 	i = 0;
 	qglColor(Qt::black);
-	for(int yi = 0;yi < _height;yi++){
-		for(int xi = 0;xi < _width;xi++){
+	for(int yi = 0;yi < vecField->height;yi++){
+		for(int xi = 0;xi < vecField->width;xi++){
 			float x = minx + stepx  * xi + stepx / 2;
 			float y = miny + stepy  * yi + stepy / 2;
 			float len = lengths[i];
 			
-    		if(!_barriers->at(i)){
-				arrow(x, y, scale * _u->at(i) / len, scale * _v->at(i) / len);
+    		if(!barriers->at(i)){
+    			// If there's not a barrier here, draw the vector.
+				arrow(x, y, scale * vecField->u.at(i) / len, scale * vecField->v.at(i) / len);
 			}
 			i++;
 		}
 	}
 }
 
-void VecFieldWidget::setData(int height, int width, const QVector<bool>& barriers, 
-	const QVector<float>& u, const QVector<float>& v){
-	_height = height;
-	_width = width;
-	
-	_barriers = &barriers;
-	_u = &u;
-	_v = &v;
+void VecFieldWidget::setData(const QVector<bool>& barriers, const VecField& vecField){
+	this->barriers = &barriers;
+	this->vecField = &vecField;
 }

@@ -5,14 +5,16 @@
 #ifndef VIZ_WIDGET_HPP
 #define VIZ_WIDGET_HPP
 
+#include "VecField.hpp"
 #include "VecFieldWidget.hpp"
 
 #include <QString>
 #include <QPair>
 #include <QSlider>
 #include <QTimer>
-#include <QVector>
 #include <QWidget>
+
+#include <vector> // Need std vector because of deleted copy constructor on VecField
 
 /**
  * Widget containing play/pause buttons, seek slider, and the GL widget that draws the vector field.
@@ -24,15 +26,13 @@ class VizWidget : public QWidget {
 	
 	bool _fileLoaded = false;
 	bool _play = false;
-	int _height;
-	int _width;
 	int _curFrame;
 	
 	QTimer _playTimer;
 	
 	QSlider* _slider;
 	QVector<bool> barrier;
-	QVector<QPair<QVector<float>, QVector<float>>> _frames;
+	std::vector<VecField> _frames;
 	
 public:
 	VizWidget(QWidget* parent = nullptr);

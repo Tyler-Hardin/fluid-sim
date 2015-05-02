@@ -5,9 +5,9 @@
 #ifndef VEC_FIELD_WIDGET_HPP
 #define VEC_FIELD_WIDGET_HPP
 
-#include <QGLWidget>
+#include "VecField.hpp"
 
-#include <mutex>
+#include <QGLWidget>
 
 /**
  * Widget that draws the vector field.
@@ -17,10 +17,11 @@ class VecFieldWidget : public QGLWidget {
 
 	int elapsed;
 	
-	int _height = 0, _width = 0;
-	const QVector<bool>* _barriers = nullptr;
-	const QVector<float>* _u = nullptr;
-	const QVector<float>* _v = nullptr;
+	const QVector<bool>* barriers = nullptr;
+	const VecField* vecField = nullptr;
+	
+	float range_x;
+	float range_y;
     
 public:
 	VecFieldWidget(QWidget* parent = nullptr);
@@ -56,14 +57,10 @@ public:
 	/**
 	 * Sets the data to use for drawing.
 	 * 
-	 * @param height	the height of the vector field 2D array
-	 * @param width		the width of the vector field 2D array
 	 * @param barriers	the array of where barriers are
-	 * @param u			the horizontal components of the vector field
-	 * @param v			the vertical components of the vector field
+	 * @param vecField	the vector field
 	 */
-	void setData(int height, int width, const QVector<bool>& barriers,
-		const QVector<float>& u, const QVector<float>& v);
+	void setData(const QVector<bool>& barriers, const VecField& vecField);
 };
 
 #endif // VEC_FIELD_WIDGET_HPP
