@@ -16,6 +16,7 @@ class VecFieldWidget : public QGLWidget {
 	Q_OBJECT
 
 	int elapsed;
+	bool _drawVectors = true;
 	
 	const QVector<bool>* barriers = nullptr;
 	const VecField* vecField = nullptr;
@@ -61,6 +62,8 @@ public:
 	 * @param vecField	the vector field
 	 */
 	void setData(const QVector<bool>& barriers, const VecField& vecField);
+
+	void setDrawVectors(bool);
 };
 
 #endif // VEC_FIELD_WIDGET_HPP

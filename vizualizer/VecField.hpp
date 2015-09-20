@@ -7,7 +7,7 @@
 /**
  * Represents a vector field.
  */
-class VecField{
+class VecField {
 
 	VecField(int height, int width, 
 		const QVector<float>& u, const QVector<float>& v) : 

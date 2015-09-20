@@ -36,9 +36,15 @@ void VecFieldWidget::resizeGL(int width, int height)
 	range_x = 2;
 	range_y = 2;
 	
+	// Determine how to scale ortho.
+	if(aspect_ratio > 1)
+		range_x *= aspect_ratio;
+	else
+		range_y *= 1/aspect_ratio;
+	
+	// Use most of screen for the aspect ratio of the vector field.
 	if((float)width / height >= aspect_ratio){
-		range_x *= ((float)vecField->width / vecField->height);
-		
+		// Extra width, so use all of height and center width.
     	glViewport(
     		(width - aspect_ratio * height) / 2, 
     		0, 
@@ -46,24 +52,31 @@ void VecFieldWidget::resizeGL(int width, int height)
     		height);
 	}
 	else{
-		range_y *= ((float)vecField->height / vecField->width);
-		
+		// Extra height, so use all width and center height.
     	glViewport(
     		0, 
     		(height - width / aspect_ratio) / 2, 
     		width, 
     		width / aspect_ratio);
 	}
-    
-
+	
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    
-	
     glOrtho(-range_x, range_x, -range_y, range_y, 1.0, 15.0);
     glMatrixMode(GL_MODELVIEW);
+    
+    range_x *= .95;
+    range_y *= .95;
 }
 
+/**
+ * Draws an array with base at x,y.
+ *
+ * @param x				center x
+ * @param y				center y
+ * @param u				horizontal component
+ * @param v				vertical componenet
+ */
 static void arrow(float x, float y, float u, float v, float s = .25){
 	glBegin(GL_LINES);
 		glVertex2f(x,y);
@@ -77,6 +90,14 @@ static void arrow(float x, float y, float u, float v, float s = .25){
 	glEnd();
 }
 
+/**
+ * Draw a square centered at x,y.
+ *
+ * @param x				center x
+ * @param y				center y
+ * @param w				width
+ * @param h				height
+ */
 static void square(float x, float y, float w, float h){
     glBegin(GL_QUADS);
         glVertex2f(x-w/2,y-h/2);
@@ -102,7 +123,7 @@ void VecFieldWidget::draw(){
 	float stepy = (maxy - miny) / vecField->height;
 	
 	// Scale of vectors.
-	constexpr float scale = .1;
+	constexpr float scale = .075;
 	
 	// Find max and min lengths so we can normalize vector length.
 	// Lengths are also used in speed heat map.
@@ -154,19 +175,21 @@ void VecFieldWidget::draw(){
 	}
 	
 	// Draw the vectors.
-	i = 0;
-	qglColor(Qt::black);
-	for(int yi = 0;yi < vecField->height;yi++){
-		for(int xi = 0;xi < vecField->width;xi++){
-			float x = minx + stepx  * xi + stepx / 2;
-			float y = miny + stepy  * yi + stepy / 2;
-			float len = lengths[i];
-			
-    		if(!barriers->at(i)){
-    			// If there's not a barrier here, draw the vector.
-				arrow(x, y, scale * vecField->u.at(i) / len, scale * vecField->v.at(i) / len);
+	if(_drawVectors) {
+		i = 0;
+		qglColor(Qt::black);
+		for(int yi = 0;yi < vecField->height;yi++){
+			for(int xi = 0;xi < vecField->width;xi++){
+				float x = minx + stepx  * xi + stepx / 2;
+				float y = miny + stepy  * yi + stepy / 2;
+				float len = lengths[i];
+
+				if(!barriers->at(i)){
+					// If there's not a barrier here, draw the vector.
+					arrow(x, y, scale * vecField->u.at(i) / len, scale * vecField->v.at(i) / len);
+				}
+				i++;
 			}
-			i++;
 		}
 	}
 }
@@ -174,4 +197,9 @@ void VecFieldWidget::draw(){
 void VecFieldWidget::setData(const QVector<bool>& barriers, const VecField& vecField){
 	this->barriers = &barriers;
 	this->vecField = &vecField;
+}
+
+void VecFieldWidget::setDrawVectors(bool b) {
+	_drawVectors = b;
+	update();
 }

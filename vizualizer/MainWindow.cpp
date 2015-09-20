@@ -42,5 +42,4 @@ void MainWindow::load() {
 	
 	std::cout << fname.toUtf8().constData() << std::endl;
 	vizWidget->loadFile(fname);
-	// TODO: Call load on vizualizer widget. Set slider min/max.
 }

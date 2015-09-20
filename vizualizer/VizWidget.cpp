@@ -2,10 +2,13 @@
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QCheckBox>
 #include <QDataStream>
 #include <QFile>
+#include <QFormLayout>
 #include <QPushButton>
-
+#include <QSizePolicy>
+#include <QSplitter>
 
 #include <atomic>
 #include <chrono>
@@ -19,6 +22,13 @@ VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	connect(_slider, SIGNAL(sliderMoved(int)), this, SLOT(sliderMoved(int)));
 	
 	_vecWidget = new VecFieldWidget();
+	_configWidget = initConfigWidget();
+
+	auto splitterWidget = new QSplitter();
+	splitterWidget->addWidget(_vecWidget);
+	splitterWidget->addWidget(_configWidget);
+	splitterWidget->setStretchFactor(0,1);
+	splitterWidget->setStretchFactor(1,0);
 	
 	// Create buttons and attach handlers.
 	auto playButton = new QPushButton("Play");
@@ -26,23 +36,37 @@ VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	auto pauseButton = new QPushButton("Pause");
 	connect(pauseButton, SIGNAL(released()), this, SLOT(pauseReleased()));
 	
-	auto hbox1 = new QHBoxLayout();
-	hbox1->addWidget(_slider);
+	auto sliderHBox = new QHBoxLayout();
+	sliderHBox->addWidget(_slider);
 
-	auto hbox2 = new QHBoxLayout();
-	hbox2->addWidget(playButton);
-	hbox2->addWidget(pauseButton);
+	auto buttonHBox = new QHBoxLayout();
+	buttonHBox->addWidget(playButton);
+	buttonHBox->addWidget(pauseButton);
 
 	auto vbox = new QVBoxLayout();
-	vbox->addWidget(_vecWidget);
-	vbox->addLayout(hbox1);
-	vbox->addLayout(hbox2);
+	vbox->addWidget(splitterWidget);
+	vbox->addLayout(sliderHBox);
+	vbox->addLayout(buttonHBox);
 	
 	this->setLayout(vbox);
 	
 	// Connect the play timer to the play event handler. The handler is called every time the
 	// timer fires.
 	connect(&_playTimer, SIGNAL(timeout()), this, SLOT(playEvent()));
+}
+
+QWidget* VizWidget::initConfigWidget() {
+	auto formLayout = new QFormLayout;
+
+	auto vectorCheckbox = new QCheckBox();
+	vectorCheckbox->setChecked(true);
+	connect(vectorCheckbox, SIGNAL(toggled(bool)),
+			this, SLOT(vectorToggled(bool)));
+
+	formLayout->addRow("Show Vectors:", vectorCheckbox);
+	auto configWidget = new QWidget;
+	configWidget->setLayout(formLayout);
+	return configWidget;
 }
 
 void VizWidget::loadFile(QString filename){
@@ -98,10 +122,16 @@ void VizWidget::nextFrame(int skip){
 }
 
 void VizWidget::setFrame(int i){
+	// Ignore requests to set frame higher than the number of frames we have.
+	if(i >= numFrames())
+		return;
+
 	_curFrame = i;
 	_slider->setValue(i);
 	
 	_vecWidget->setData(barrier, _frames[i]);
+	
+	_vecWidget->resizeGL(_vecWidget->width(), _vecWidget->height());
 	_vecWidget->update();
 }
 
@@ -123,4 +153,8 @@ void VizWidget::playReleased(){
 
 void VizWidget::pauseReleased(){
 	_playTimer.stop();
+}
+
+void VizWidget::vectorToggled(bool checked) {
+	_vecWidget->setDrawVectors(checked);
 }

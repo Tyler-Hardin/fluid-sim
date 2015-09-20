@@ -8,7 +8,7 @@ QMAKE_CXXFLAGS_DEBUG += -pg
 QMAKE_LFLAGS_DEBUG += -pg
 
 INCLUDEPATH += /usr/local/include
-LIBS        += -L/usr/local/libs -lmgl2-qt5 -lmgl2 
+LIBS        += -L/usr/local/libs 
 
 TEMPLATE = app
 TARGET = vizualizer
@@ -18,8 +18,10 @@ INCLUDEPATH += .
 #CONFIG += debug
 QT += widgets gui opengl
 
-QMAKE_CXX = clang++-3.7
+QMAKE_CXX = clang++
 
 # Input
-SOURCES += main.cpp MainWindow.cpp VecFieldWidget.cpp VizWidget.cpp VecField.cpp
-HEADERS += MainWindow.hpp VecFieldWidget.hpp VizWidget.hpp VecField.hpp
+SOURCES += main.cpp MainWindow.cpp VecFieldWidget.cpp VizWidget.cpp VecField.cpp \
+    SimState.cpp
+HEADERS += MainWindow.hpp VecFieldWidget.hpp VizWidget.hpp VecField.hpp \
+    SimState.hpp
