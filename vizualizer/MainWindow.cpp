@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "NewDialog.hpp"
 
 #include <QAction>
 #include <QFileDialog>
@@ -14,14 +15,19 @@ void MainWindow::setupMenu(){
 	exitAction->setShortcuts(QKeySequence::Quit);
 	exitAction->setStatusTip(tr("Exit application"));
 	connect(exitAction, SIGNAL(triggered()), this, SLOT(close()));
-	
-	QAction* loadAction = new QAction(tr("&Load"), this);
-	loadAction->setShortcuts(QKeySequence::Quit);
-	loadAction->setStatusTip(tr("Load fluid file"));
-	connect(loadAction, SIGNAL(triggered()), this, SLOT(load()));
-	
+
+	QAction* newAction = new QAction(tr("&New"), this);
+	newAction->setStatusTip(tr("Start new simulation"));
+	connect(newAction, SIGNAL(triggered()), this, SLOT(newSimulation()));
+
+	editAction = new QAction(tr("&Edit"), this);
+	editAction->setStatusTip(tr("Edit (and reset) this simulation"));
+	connect(editAction, SIGNAL(triggered()), this, SLOT(editSimulation()));
+	editAction->setEnabled(false);
+
 	auto fileMenu = menuBar->addMenu(tr("&File"));
-	fileMenu->addAction(loadAction);
+	fileMenu->addAction(newAction);
+	fileMenu->addAction(editAction);
 	fileMenu->addSeparator();
 	fileMenu->addAction(exitAction);
 }
@@ -37,9 +43,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	setWindowTitle(tr("Vizualizer"));
 }
 
-void MainWindow::load() {
-	QString fname = QFileDialog::getOpenFileName(nullptr, tr("Open File"), "./", tr("*.dat"));
-	
-	std::cout << fname.toUtf8().constData() << std::endl;
-	vizWidget->loadFile(fname);
+void MainWindow::editSimulation() {
+	NewDialog* newDialog = new NewDialog();
+	if(newDialog->exec()) {
+		SimState s(newDialog->height, newDialog->width);
+		vizWidget->setState(s);
+	}
+	delete newDialog;
+}
+
+
+void MainWindow::newSimulation() {
+	NewDialog* newDialog = new NewDialog();
+	if(newDialog->exec()) {
+		SimState s(newDialog->height, newDialog->width);
+		vizWidget->setState(s);
+	}
+	delete newDialog;
 }

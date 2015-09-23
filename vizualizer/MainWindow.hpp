@@ -9,12 +9,14 @@
 
 #include <QMainWindow>
 
+#include <boost/optional.hpp>
+
 /**
- * Main window of the project. Contains menu and VizWidget.
+ * @brief Main window of the project. Contains a menu, controls and a display widget.
  */
 class MainWindow : public QMainWindow{
 	Q_OBJECT
-	
+
 	VizWidget* vizWidget;
 	
 	/**
@@ -31,10 +33,8 @@ public:
 	MainWindow(QWidget* parent = nullptr);
 	
 private slots:
-	/**
-	 * Called when the "Load file" menu option is clicked. Opens file dialog to select file.
-	 */
-	void load();
+	void editSimulation();
+	void newSimulation();
 };
 
 #endif // MAIN_WINDOW_HPP

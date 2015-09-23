@@ -5,7 +5,8 @@
 #ifndef VIZ_WIDGET_HPP
 #define VIZ_WIDGET_HPP
 
-#include "VecField.hpp"
+#include "Frame.hpp"
+#include "SimState.hpp"
 #include "VecFieldWidget.hpp"
 
 #include <QString>
@@ -13,6 +14,8 @@
 #include <QSlider>
 #include <QTimer>
 #include <QWidget>
+
+#include <boost/optional.hpp>
 
 #include <vector> // Need std vector because of deleted copy constructor on VecField
 
@@ -25,26 +28,27 @@ class VizWidget : public QWidget {
 	VecFieldWidget* _vecWidget = nullptr;
 	QWidget* _configWidget = nullptr;
 
-	bool _fileLoaded = false;
+	// Set when vizualizer is playing/animating.
 	bool _play = false;
-	int _curFrame;
+
+	// Store the index of the current frame.
+	int _curFrame = 0;
+
+	// Set the number of frames to skip forward when animating.
+	int _skip = 10;
+
+	boost::optional<SimState> _state;
 	
 	QTimer _playTimer;
 	
 	QSlider* _slider = nullptr;
 	QVector<bool> barrier;
-	std::vector<VecField> _frames;
+	std::vector<Frame> _frames;
 
 	QWidget* initConfigWidget();
 	
 public:
 	VizWidget(QWidget* parent = nullptr);
-	
-	/**
-	 * Loads a new data file.
-	 * @param file		the filename
-	 */
-	void loadFile(QString file);
 	
 	/**
 	 * Gets the number of frames.
@@ -53,20 +57,20 @@ public:
 	int numFrames();
 	
 	/**
-	 * Sets a new frame (and skips a number of frames).
-	 *
-	 * @param skip		the number of frames to skip
-	 */
-	void nextFrame(int skip = 1);
-	
-	/**
 	 * Sets a new frame.
 	 *
 	 * @param frame		the frame number
 	 */
 	void setFrame(int i);
+
+	void setState(SimState);
 	
 private slots:
+
+	/**
+	 * Slot called when the display widget is clicked.
+	 */
+	void displayMousePressed(QMouseEvent* event);
 
 	/**
 	 * Slot called when the play button is released.

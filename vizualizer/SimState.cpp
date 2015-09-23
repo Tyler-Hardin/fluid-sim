@@ -35,30 +35,83 @@ static arma::Mat<T> roll(arma::Mat<T> in, int shift, int axis) {
 }
 
 SimState::SimState(int height, int width, double viscosity, double u0) : height(height),
-	width(width), viscosity(viscosity), omega(1 / (3*viscosity + 0.5)), u0(u0) {}
+	width(width),
+	//viscosity(viscosity),
+	omega(1 / (3*viscosity + 0.5)),
+	u0(u0),
+	barrier(new bool[height * width]),
+	n0(four9ths * (arma::mat(height, width, arma::fill::ones)  - 1.5*u0*u0)),
+	nN(one9th * (arma::mat(height, width, arma::fill::ones)  - 1.5*u0*u0)),
+	nS(one9th * (arma::mat(height, width, arma::fill::ones)  - 1.5*u0*u0)),
+	nE(one9th * (arma::mat(height, width, arma::fill::ones) + 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	nW(one9th * (arma::mat(height, width, arma::fill::ones) - 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	nNE(one36th * (arma::mat(height, width, arma::fill::ones) + 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	nSE(one36th * (arma::mat(height, width, arma::fill::ones) + 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	nNW(one36th * (arma::mat(height, width, arma::fill::ones) - 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	nSW(one36th * (arma::mat(height, width, arma::fill::ones) - 3*u0 + 4.5*u0*u0 - 1.5*u0*u0)),
+	rho(n0 + nN + nS + nE + nW + nNE + nSE + nNW + nSW),	// macroscopic density
+	_ux((nE + nNE + nSE - nW - nNW - nSW) / rho),			// macroscopic x velocity
+	_uy((nN + nNE + nNW - nS - nSE - nSW) / rho)			// macroscopic y velocity
+{
+	memset(barrier.get(), 0, height * width * sizeof(bool));
+}
+
+/**
+ * @brief Save the state of the current frame.
+ * @return the frame of the current simulation state
+ */
+Frame SimState::getFrame() {
+	return Frame(height, width, barrier, _ux, _uy, rho);
+}
+
+/**
+ * @brief Step (stream and collide) the simulation.
+ */
+void SimState::step() {
+	started = true;
+	stream();
+	collide();
+}
+
+void SimState::toggleBarrier(int row, int col) {
+	if(!started)
+		barrier[row * width + col] = !barrier[row * width + col];
+}
+
+const arma::mat& SimState::ux() {
+	return _ux;
+}
+
+const arma::mat& SimState::uy() {
+	return _uy;
+}
+
+const arma::mat& SimState::density() {
+	return rho;
+}
 
 /**
  * @brief Implement collide step of LBM.
  */
 void SimState::collide() {
 	rho = n0 + nN + nS + nE + nW + nNE + nSE + nNW + nSW;
-	ux = (nE + nNE + nSE - nW - nNW - nSW) / rho;
-	uy = (nN + nNE + nNW - nS - nSE - nSW) / rho;
-	arma::mat ux2 = ux % ux;				// pre-compute terms used repeatedly...
-	arma::mat uy2 = uy % uy;
+	_ux = (nE + nNE + nSE - nW - nNW - nSW) / rho;
+	_uy = (nN + nNE + nNW - nS - nSE - nSW) / rho;
+	arma::mat ux2 = _ux % _ux;				// pre-compute terms used repeatedly...
+	arma::mat uy2 = _uy % _uy;
 	arma::mat u2 = ux2 + uy2;
 	arma::mat omu215 = 1 - 1.5*u2;		// "one minus u2 times 1.5"
-	arma::mat uxuy = ux % uy;
+	arma::mat uxuy = _ux % _uy;
 
 	n0 = (1-omega)*n0 + omega * four9ths * rho % omu215;
-	nN = (1-omega)*nN + omega * one9th * rho % (omu215 + 3*uy + 4.5*uy2);
-	nS = (1-omega)*nS + omega * one9th * rho % (omu215 - 3*uy + 4.5*uy2);
-	nE = (1-omega)*nE + omega * one9th * rho % (omu215 + 3*ux + 4.5*ux2);
-	nW = (1-omega)*nW + omega * one9th * rho % (omu215 - 3*ux + 4.5*ux2);
-	nNE = (1-omega)*nNE + omega * one36th * rho % (omu215 + 3*(ux+uy) + 4.5*(u2+2*uxuy));
-	nNW = (1-omega)*nNW + omega * one36th * rho % (omu215 + 3*(-ux+uy) + 4.5*(u2-2*uxuy));
-	nSE = (1-omega)*nSE + omega * one36th * rho % (omu215 + 3*(ux-uy) + 4.5*(u2-2*uxuy));
-	nSW = (1-omega)*nSW + omega * one36th * rho % (omu215 + 3*(-ux-uy) + 4.5*(u2+2*uxuy));
+	nN = (1-omega)*nN + omega * one9th * rho % (omu215 + 3*_uy + 4.5*uy2);
+	nS = (1-omega)*nS + omega * one9th * rho % (omu215 - 3*_uy + 4.5*uy2);
+	nE = (1-omega)*nE + omega * one9th * rho % (omu215 + 3*_ux + 4.5*ux2);
+	nW = (1-omega)*nW + omega * one9th * rho % (omu215 - 3*_ux + 4.5*ux2);
+	nNE = (1-omega)*nNE + omega * one36th * rho % (omu215 + 3*(_ux+_uy) + 4.5*(u2+2*uxuy));
+	nNW = (1-omega)*nNW + omega * one36th * rho % (omu215 + 3*(-_ux+_uy) + 4.5*(u2-2*uxuy));
+	nSE = (1-omega)*nSE + omega * one36th * rho % (omu215 + 3*(_ux-_uy) + 4.5*(u2-2*uxuy));
+	nSW = (1-omega)*nSW + omega * one36th * rho % (omu215 + 3*(-_ux-_uy) + 4.5*(u2+2*uxuy));
 
 
 	// Force steady rightward flow at ends (no need to set 0, N, and S components):
@@ -77,6 +130,7 @@ void SimState::collide() {
  * @brief Implement stream step of LBM.
  */
 void SimState::stream() {
+	// Move fluids.
 	nN  = roll(nN,   1, 0);			// axis 0 is north-south; + direction is north
 	nNE = roll(nNE,  1, 0);
 	nNW = roll(nNW,  1, 0);
@@ -90,16 +144,7 @@ void SimState::stream() {
 	nNW = roll(nNW, -1, 1);
 	nSW = roll(nSW, -1, 1);
 
-	// Use tricky boolean arrays to handle barrier collisions (bounce-back):
-//	nN[barrierN] = nS[barrier]
-//	nS[barrierS] = nN[barrier]
-//	nE[barrierE] = nW[barrier]
-//	nW[barrierW] = nE[barrier]
-//	nNE[barrierNE] = nSW[barrier]
-//	nNW[barrierNW] = nSE[barrier]
-//	nSE[barrierSE] = nNW[barrier]
-//	nSW[barrierSW] = nNE[barrier]
-
+	// Handle barriers. Go in opposite direction if we hit a barrier.
 	int rows = height;
 	int cols = width;
 	for(int row = 0;row < rows;row++) {

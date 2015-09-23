@@ -6,6 +6,7 @@
 #include <QDataStream>
 #include <QFile>
 #include <QFormLayout>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSplitter>
@@ -16,9 +17,14 @@
 #include <iostream>
 #include <thread>
 
-VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {	
+#include <QDebug>
+
+VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	// Create slider and attach handler.
 	_slider = new QSlider(Qt::Horizontal);
+	_slider->setMaximum(1);
+	_slider->setMinimum(0);
+	_slider->setSliderPosition(_slider->maximum());
 	connect(_slider, SIGNAL(sliderMoved(int)), this, SLOT(sliderMoved(int)));
 	
 	_vecWidget = new VecFieldWidget();
@@ -32,9 +38,11 @@ VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	
 	// Create buttons and attach handlers.
 	auto playButton = new QPushButton("Play");
-	connect(playButton, SIGNAL(released()), this, SLOT(playReleased()));
+	connect(playButton, SIGNAL(released()),
+			this, SLOT(playReleased()));
 	auto pauseButton = new QPushButton("Pause");
-	connect(pauseButton, SIGNAL(released()), this, SLOT(pauseReleased()));
+	connect(pauseButton, SIGNAL(released()),
+			this, SLOT(pauseReleased()));
 	
 	auto sliderHBox = new QHBoxLayout();
 	sliderHBox->addWidget(_slider);
@@ -52,7 +60,13 @@ VizWidget::VizWidget(QWidget* parent) : QWidget(parent) {
 	
 	// Connect the play timer to the play event handler. The handler is called every time the
 	// timer fires.
-	connect(&_playTimer, SIGNAL(timeout()), this, SLOT(playEvent()));
+	connect(&_playTimer, SIGNAL(timeout()),
+			this, SLOT(playEvent()));
+
+	// Connect mouse press event from display widget to this object so we can add barriers
+	// when the user clicks.
+	connect(_vecWidget, SIGNAL(mousePressed(QMouseEvent*)),
+			this, SLOT(displayMousePressed(QMouseEvent*)));
 }
 
 QWidget* VizWidget::initConfigWidget() {
@@ -69,86 +83,81 @@ QWidget* VizWidget::initConfigWidget() {
 	return configWidget;
 }
 
-void VizWidget::loadFile(QString filename){
-	int height, width;
-	QFile file(filename);
-	file.open(QIODevice::ReadOnly);
-	
-	// Clear frame buffer in case a file is already loaded.
-	_frames.clear();
-	
-	QDataStream in(&file);
-	
-	// Input files are in big endian and floats in it are single precision. Notify input stream so
-	// it reads correctly.
-	in.setByteOrder(QDataStream::BigEndian);
-	in.setFloatingPointPrecision(QDataStream::SinglePrecision);
-	
-	in >> height;
-	in >> width;
-	
-	// Read barrier data.
-	unsigned char b;
-	barrier.clear();
-	for(int i = 0;i < height;i++){
-		for(int j = 0;j < width;j++){
-			in >> b;
-			barrier.push_back(b);
-		}
-	}
-	
-	// Read vector fields.
-	while(!in.atEnd()){
-		_frames.push_back(VecField::read(in, height, width));
-	}
-	
-	if(_frames.size() > 0){
-		setFrame(0);
-		_slider->setMaximum(_frames.size() - 1);
-	}
-	else{
-		_fileLoaded = false;
-	}
-}
-
 int VizWidget::numFrames(){
 	return _frames.size();
 }
 
-void VizWidget::nextFrame(int skip){
-	if(_curFrame + skip < (int)_frames.size()){
-		setFrame(_curFrame + skip);
-	}
-}
-
 void VizWidget::setFrame(int i){
 	// Ignore requests to set frame higher than the number of frames we have.
-	if(i >= numFrames())
-		return;
+	while(i >= numFrames()) {
+		if(_state) {
+			_frames.push_back(_state->getFrame());
+			_state->step();
+		} else
+			return;
+	}
 
 	_curFrame = i;
-	_slider->setValue(i);
-	
-	_vecWidget->setData(barrier, _frames[i]);
+	_slider->setMaximum(numFrames());
+	_slider->setValue(_curFrame + 1);
+	_vecWidget->setData(_frames[i]);
+
+	qDebug() << "i: " << i;
+	qDebug() << "Val: " << _slider->value();
+	qDebug() << "Max: " << _slider->maximum() << "\n\n";
 	
 	_vecWidget->resizeGL(_vecWidget->width(), _vecWidget->height());
 	_vecWidget->update();
 }
 
+void VizWidget::setState(SimState s) {
+	_play = false;
+	_playTimer.stop();
+
+	_curFrame = 0;
+	_frames.clear();
+
+	_slider->setMaximum(1);
+	_slider->setMinimum(0);
+	_slider->setSliderPosition(_slider->maximum());
+
+	qDebug() << "Max: " << _slider->maximum();
+	_state = s;
+	_frames.push_back(_state->getFrame());
+	setFrame(0);
+
+}
+
+void VizWidget::displayMousePressed(QMouseEvent *event) {
+	int col = _vecWidget->getCol(event->x());
+	int row = _vecWidget->getRow(event->y());
+
+	// Click was not in grid.
+	if(row < 0 || col < 0)
+		return;
+
+	if(_state)
+		_state->toggleBarrier(row, col);
+
+	_vecWidget->update();
+}
+
 void VizWidget::sliderMoved(int val) {
-	setFrame(val);
+	if(val > 0)
+		setFrame(val - 1);
 }
 
 void VizWidget::playEvent(){
-	int skip = _frames.size() / 1000;
-	if(_curFrame + skip < (int)_frames.size())
-		nextFrame(skip);
-	else
-		_playTimer.stop();
+	if(_play) {
+		setFrame(_curFrame + _skip);
+	}
 }
 
 void VizWidget::playReleased(){
-	_playTimer.start(50);
+	if(_state) {
+		_play = true;
+		_playTimer.start(100);
+	}
 }
 
 void VizWidget::pauseReleased(){
