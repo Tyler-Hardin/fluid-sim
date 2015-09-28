@@ -2,8 +2,8 @@
  * 4/4/2015
  */
 
-#ifndef VEC_FIELD_WIDGET_HPP
-#define VEC_FIELD_WIDGET_HPP
+#ifndef DISPLAYWIDGET_HPP
+#define DISPLAYWIDGET_HPP
 
 #include "Frame.hpp"
 
@@ -14,7 +14,7 @@
 /**
  * Widget that draws the vector field.
  */
-class VecFieldWidget : public QGLWidget {
+class DisplayWidget : public QGLWidget {
 	Q_OBJECT
 
 	int elapsed;
@@ -38,7 +38,7 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 
 public:
-	VecFieldWidget(QWidget* parent = nullptr);
+	DisplayWidget(QWidget* parent = nullptr);
 
 	int getRow(int pixel);
 	int getCol(int pixel);
@@ -84,4 +84,4 @@ signals:
 	void mousePressed(QMouseEvent*);
 };
 
-#endif // VEC_FIELD_WIDGET_HPP
+#endif // DISPLAYWIDGET_HPP

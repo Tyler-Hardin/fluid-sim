@@ -38,6 +38,7 @@ class SimState
 	arma::mat _ux;		// macroscopic x velocity
 	arma::mat _uy;		// macroscopic y velocity
 
+
 	void stream();
 	void collide();
 
@@ -47,11 +48,16 @@ public:
 	Frame getFrame();
 	void step();
 
+	bool getBarrier(int row, int col);
+	void setBarrier(bool val, int row, int col);
 	void toggleBarrier(int row, int col);
 
 	const arma::mat& ux();
 	const arma::mat& uy();
 	const arma::mat& density();
+
+	static SimState load(QDataStream& stream);
+	void save(QDataStream& stream);
 
 };
 

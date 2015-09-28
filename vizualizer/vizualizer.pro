@@ -21,11 +21,13 @@ QT += widgets gui opengl
 QMAKE_CXX = clang++
 
 # Input
-SOURCES += main.cpp MainWindow.cpp VecFieldWidget.cpp VizWidget.cpp \
+SOURCES += main.cpp MainWindow.cpp \
     SimState.cpp \
     NewDialog.cpp \
-    Frame.cpp
-HEADERS += MainWindow.hpp VecFieldWidget.hpp VizWidget.hpp \
+    Frame.cpp \
+    DisplayWidget.cpp
+HEADERS += MainWindow.hpp \
     SimState.hpp \
     NewDialog.hpp \
-    Frame.hpp
+    Frame.hpp \
+    DisplayWidget.hpp

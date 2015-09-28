@@ -12,14 +12,16 @@
  * Represents a vector field.
  */
 class Frame {
+	boost::shared_array<const bool> barriers;
 
 public:
 	int height;
 	int width;
-	boost::shared_array<const bool> barriers;
 	arma::mat ux;
 	arma::mat uy;
 	arma::mat density;
+
+	bool getBarrier(int row, int col);
 
 	Frame(int height, int width,
 		  const boost::shared_array<const bool> barriers,

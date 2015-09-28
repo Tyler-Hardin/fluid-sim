@@ -10,3 +10,7 @@ Frame::Frame(int height, int width,
 	Q_ASSERT(uy.n_rows == (arma::uword)height && uy.n_cols == (arma::uword)width);
 	Q_ASSERT(density.n_rows == (arma::uword)height && density.n_cols == (arma::uword)width);
 }
+
+bool Frame::getBarrier(int row, int col) {
+	return barriers[row * width + col];
+}

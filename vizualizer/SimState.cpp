@@ -34,6 +34,28 @@ static arma::Mat<T> roll(arma::Mat<T> in, int shift, int axis) {
 	return out;
 }
 
+template<typename T>
+static QDataStream& operator<<(QDataStream& stream, const arma::Mat<T>& mat) {
+	for(arma::uword row = 0;row < mat.n_rows;row++) {
+		for(arma::uword col = 0;col < mat.n_cols;col++) {
+			stream << mat(row, col);
+		}
+	}
+
+	return stream;
+}
+
+template<typename T>
+static QDataStream &operator>>(QDataStream &stream, arma::Mat<T> &mat) {
+	for(arma::uword row = 0;row < mat.n_rows;row++) {
+		for(arma::uword col = 0;col < mat.n_cols;col++) {
+			stream >> mat(row, col);
+		}
+	}
+
+	return stream;
+}
+
 SimState::SimState(int height, int width, double viscosity, double u0) : height(height),
 	width(width),
 	//viscosity(viscosity),
@@ -73,9 +95,24 @@ void SimState::step() {
 	collide();
 }
 
+bool SimState::getBarrier(int row, int col) {
+	auto cols = width;
+	return barrier[row * cols + col];
+}
+
+void SimState::setBarrier(bool val, int row, int col) {
+	auto cols = width;
+
+	if(started) {
+		bool* oldBarrier = barrier.get();
+		barrier = boost::shared_array<bool>(new bool[height * width]);
+		memcpy(barrier.get(), oldBarrier, width * height * sizeof(bool));
+	}
+	barrier[row * cols + col] = val;
+}
+
 void SimState::toggleBarrier(int row, int col) {
-	if(!started)
-		barrier[row * width + col] = !barrier[row * width + col];
+	setBarrier(!getBarrier(row, col), row, col);
 }
 
 const arma::mat& SimState::ux() {
@@ -149,7 +186,7 @@ void SimState::stream() {
 	int cols = width;
 	for(int row = 0;row < rows;row++) {
 		for(int col = 0;col < cols;col++) {
-			if(barrier[row * cols + col]) {
+			if(getBarrier(row, col)) {
 				if(row > 0) {
 					nS(row - 1, col) = nN(row, col);
 
@@ -179,4 +216,73 @@ void SimState::stream() {
 			}
 		}
 	}
+}
+
+void SimState::save(QDataStream &stream) {
+	stream << started;
+	stream << height;
+	stream << width;
+	stream << omega;
+	stream << u0;
+
+	for(int row = 0;row < height;row++) {
+		for(int col = 0;col < width;col++) {
+			stream << getBarrier(row, col);
+		}
+	}
+
+	stream << n0;
+	stream << nN;
+	stream << nS;
+	stream << nE;
+	stream << nW;
+	stream << nNE;
+	stream << nSE;
+	stream << nNW;
+	stream << nSW;
+	stream << rho;
+	stream << _ux;
+	stream << _uy;
+}
+
+SimState SimState::load(QDataStream &stream) {
+	bool started;
+	int height;
+	int width;
+	double omega;
+	double u0;
+
+	stream >> started;
+	stream >> height;
+	stream >> width;
+	stream >> omega;
+	stream >> u0;
+
+	// We don't know viscosity, but since it is the the only determinant of omega, and we know
+	// omega, we'll just restore omega after creating the instance.
+	SimState state(height, width, 0.0, u0);
+	state.omega = omega;
+
+	for(int row = 0;row < height;row++) {
+		for(int col = 0;col < width;col++) {
+			bool temp;
+			stream >> temp;
+			state.setBarrier(temp, row, col);
+		}
+	}
+
+	stream >> state.n0;
+	stream >> state.nN;
+	stream >> state.nS;
+	stream >> state.nE;
+	stream >> state.nW;
+	stream >> state.nNE;
+	stream >> state.nSE;
+	stream >> state.nNW;
+	stream >> state.nSW;
+	stream >> state.rho;
+	stream >> state._ux;
+	stream >> state._uy;
+
+	return state;
 }

@@ -1,4 +1,4 @@
-#include "VecFieldWidget.hpp"
+#include "DisplayWidget.hpp"
 
 #include <QMouseEvent>
 
@@ -9,16 +9,16 @@
 
 static constexpr float MARGIN = .025;
 
-VecFieldWidget::VecFieldWidget(QWidget* parent) : QGLWidget(parent) {
+DisplayWidget::DisplayWidget(QWidget* parent) : QGLWidget(parent) {
 	elapsed = 0;
 	setAutoFillBackground(true);
 }
 
-void VecFieldWidget::mousePressEvent(QMouseEvent* event) {
+void DisplayWidget::mousePressEvent(QMouseEvent* event) {
 	emit mousePressed(event);
 }
 
-int VecFieldWidget::getRow(int pixel) {
+int DisplayWidget::getRow(int pixel) {
 	// Determine drawing box coordinates.
 	float miny = range_y * MARGIN;
 	float maxy = range_y * (1 - MARGIN);
@@ -46,7 +46,7 @@ int VecFieldWidget::getRow(int pixel) {
 	}
 }
 
-int VecFieldWidget::getCol(int pixel) {
+int DisplayWidget::getCol(int pixel) {
 	// Determine drawing box coordinates.
 	float minx = range_x * MARGIN;
 	float maxx = range_x * (1 - MARGIN);
@@ -74,19 +74,19 @@ int VecFieldWidget::getCol(int pixel) {
 	}
 }
 
-QSize VecFieldWidget::sizeHint() const
+QSize DisplayWidget::sizeHint() const
 {
     return QSize(400, 400);
 }
 
-void VecFieldWidget::initializeGL()
+void DisplayWidget::initializeGL()
 {
 	//auto color = this->palette().color(QPalette::Background);
 	//qglClearColor(color);
 	qglClearColor(Qt::white);
 }
 
-void VecFieldWidget::paintGL()
+void DisplayWidget::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
@@ -94,7 +94,7 @@ void VecFieldWidget::paintGL()
     draw();
 }
 
-void VecFieldWidget::resizeGL(int width, int height)
+void DisplayWidget::resizeGL(int width, int height)
 {
 	if(!frame)
 		return;
@@ -179,7 +179,7 @@ static void square(float x, float y, float w, float h){
     glEnd();
 }
 
-void VecFieldWidget::draw(){
+void DisplayWidget::draw(){
 	// Determine drawing box coordinates.
 	float minx = range_x * MARGIN;
 	float maxx = range_x * (1 - MARGIN);
@@ -231,7 +231,7 @@ void VecFieldWidget::draw(){
 			float len = lengths[i];
 			
 			
-			if(!frame->barriers[yi * frame->width + xi]){
+			if(!frame->getBarrier(yi, xi)){
     			// If it's not a barrier, draw a color square.
 				int hue = 240 - len / max_len * 240;
 				qglColor(QColor::fromHsv(hue, 240, 200));
@@ -256,7 +256,7 @@ void VecFieldWidget::draw(){
 				float y = miny + stepy  * yi + stepy / 2;
 				float len = lengths[i];
 
-				if(!frame->barriers[yi * frame->width + xi]){
+				if(!frame->getBarrier(yi, xi)){
 					// If there's not a barrier here, draw the vector.
 					arrow(x, y, scale * frame->ux.at(i) / len, scale * frame->uy.at(i) / len);
 				}
@@ -266,11 +266,11 @@ void VecFieldWidget::draw(){
 	}
 }
 
-void VecFieldWidget::setData(const Frame& frame){
+void DisplayWidget::setData(const Frame& frame){
 	this->frame = frame;
 }
 
-void VecFieldWidget::setDrawVectors(bool b) {
+void DisplayWidget::setDrawVectors(bool b) {
 	_drawVectors = b;
 	update();
 }
