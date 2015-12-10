@@ -30,6 +30,9 @@ NewDialog::NewDialog() :
 	formLayout->addRow(buttonBox);
 }
 
+/**
+ * @brief Validates input.
+ */
 void NewDialog::accept() {
 	bool ok;
 

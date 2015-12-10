@@ -7,6 +7,8 @@
 
 #include <boost/shared_array.hpp>
 
+#include <atomic>
+
 class SimState
 {
 	// Set once the simulation has been started (when step() is first called).
@@ -42,11 +44,17 @@ class SimState
 	void stream();
 	void collide();
 
-public:
-	SimState(int height, int width, double viscosity = 0.02, double u0 = 0.1);
+    std::vector<Frame> frames;
 
-	Frame getFrame();
+    std::shared_ptr<SimState> _initialState = nullptr;
+
+public:
+    SimState(int height, int width, double viscosity = 0.02, double u0 = 0.05);
+
 	void step();
+
+    Frame getFrame(int i = -1);
+    int numFrames();
 
 	bool getBarrier(int row, int col);
 	void setBarrier(bool val, int row, int col);
@@ -56,9 +64,10 @@ public:
 	const arma::mat& uy();
 	const arma::mat& density();
 
+    SimState initialState();
+
 	static SimState load(QDataStream& stream);
 	void save(QDataStream& stream);
-
 };
 
 #endif // SIMSTATE_HPP

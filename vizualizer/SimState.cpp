@@ -1,5 +1,7 @@
 #include "SimState.hpp"
 
+#include <QtDebug>
+
 /**
  * Implements numpy.array.roll().
  */
@@ -7,18 +9,14 @@ template<typename T>
 static arma::Mat<T> roll(arma::Mat<T> in, int shift, int axis) {
 	arma::Mat<T> out(in.n_rows, in.n_cols);
 
-	shift = -1*shift;
+    shift = -shift;
 
-	if(shift < 0) {
-		if(axis == 0) {
-			while(shift < 0) {
-				shift += in.n_rows;
-			}
+    while(shift < 0) {
+        if(axis == 0) {
+            shift += in.n_rows;
 		}
-		else if(axis == 1) {
-			while(shift < 0) {
-				shift += in.n_cols;
-			}
+        else if(axis == 1) {
+            shift += in.n_cols;
 		}
 	}
 
@@ -36,13 +34,13 @@ static arma::Mat<T> roll(arma::Mat<T> in, int shift, int axis) {
 
 template<typename T>
 static QDataStream& operator<<(QDataStream& stream, const arma::Mat<T>& mat) {
-	for(arma::uword row = 0;row < mat.n_rows;row++) {
-		for(arma::uword col = 0;col < mat.n_cols;col++) {
-			stream << mat(row, col);
-		}
-	}
+    for(arma::uword row = 0;row < mat.n_rows;row++) {
+        for(arma::uword col = 0;col < mat.n_cols;col++) {
+            stream << mat(row, col);
+        }
+    }
 
-	return stream;
+    return stream;
 }
 
 template<typename T>
@@ -76,23 +74,46 @@ SimState::SimState(int height, int width, double viscosity, double u0) : height(
 	_uy((nN + nNE + nNW - nS - nSE - nSW) / rho)			// macroscopic y velocity
 {
 	memset(barrier.get(), 0, height * width * sizeof(bool));
+
+    auto f = Frame(height, width, barrier, _ux, _uy, rho);
+    frames.push_back(f);
 }
 
 /**
  * @brief Save the state of the current frame.
  * @return the frame of the current simulation state
  */
-Frame SimState::getFrame() {
-	return Frame(height, width, barrier, _ux, _uy, rho);
+Frame SimState::getFrame(int i) {
+    if(i == -1) {
+        return frames[frames.size() - 1];
+    } else {
+        return frames.at(i);
+    }
+}
+
+/**
+ * @brief SimState::numFrames
+ * @return the number of frames stored.
+ */
+int SimState::numFrames() {
+    return frames.size();
 }
 
 /**
  * @brief Step (stream and collide) the simulation.
  */
 void SimState::step() {
-	started = true;
+    if(_initialState == nullptr) {
+        _initialState = std::make_shared<SimState>(SimState(*this));
+    }
+
+    started = true;
+
 	stream();
 	collide();
+
+    auto f = Frame(height, width, barrier, _ux, _uy, rho);
+    frames.push_back(f);
 }
 
 bool SimState::getBarrier(int row, int col) {
@@ -103,16 +124,28 @@ bool SimState::getBarrier(int row, int col) {
 void SimState::setBarrier(bool val, int row, int col) {
 	auto cols = width;
 
-	if(started) {
-		bool* oldBarrier = barrier.get();
-		barrier = boost::shared_array<bool>(new bool[height * width]);
-		memcpy(barrier.get(), oldBarrier, width * height * sizeof(bool));
-	}
-	barrier[row * cols + col] = val;
+    /*if(started) {
+        bool* oldBarrier = barrier.get();
+        barrier = boost::shared_array<bool>(new bool[height * width]);
+        //memcpy(barrier.get(), oldBarrier, width * height * sizeof(bool));
+        for(int i = 0;i < height * width;i++) {
+            barrier[i] = oldBarrier[i];
+        }
+    }*/
+
+    if(!started) {
+        barrier[row * cols + col] = val;
+    }
+
+    /*if(started) {
+        step();
+    }*/
 }
 
 void SimState::toggleBarrier(int row, int col) {
-	setBarrier(!getBarrier(row, col), row, col);
+    qDebug() << "toggle row,col: " << row << "," << col;
+    bool val = !getBarrier(row, col);
+    setBarrier(val, row, col);
 }
 
 const arma::mat& SimState::ux() {
@@ -184,6 +217,7 @@ void SimState::stream() {
 	// Handle barriers. Go in opposite direction if we hit a barrier.
 	int rows = height;
 	int cols = width;
+
 	for(int row = 0;row < rows;row++) {
 		for(int col = 0;col < cols;col++) {
 			if(getBarrier(row, col)) {
@@ -215,7 +249,14 @@ void SimState::stream() {
 				}
 			}
 		}
-	}
+    }
+}
+
+SimState SimState::initialState() {
+    if(_initialState)
+        return *_initialState;
+    else
+        return *this;
 }
 
 void SimState::save(QDataStream &stream) {

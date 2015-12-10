@@ -22,6 +22,7 @@ public:
 	arma::mat density;
 
 	bool getBarrier(int row, int col);
+    Frame getSubframe(int row, int col, int height, int width);
 
 	Frame(int height, int width,
 		  const boost::shared_array<const bool> barriers,

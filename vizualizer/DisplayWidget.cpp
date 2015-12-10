@@ -4,20 +4,142 @@
 
 #include <cmath>
 #include <iostream>
+#include <sstream>
 
 #include <QDebug>
 
 static constexpr float MARGIN = .025;
 
 DisplayWidget::DisplayWidget(QWidget* parent) : QGLWidget(parent) {
-	elapsed = 0;
 	setAutoFillBackground(true);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    qDebug() << maximumSize();
+    setMouseTracking(true);
+
+
+    resizeGL(size().width(), size().height());
+    update();
 }
 
+/**
+ * @brief Handles when the mouse leaves the widget.
+ */
+void DisplayWidget::leaveEvent(QEvent*) {
+    if(interactionMode == HOVER) {
+        interactionMode = NONE;
+        emit hover("");
+    }
+}
+
+/**
+ * @brief Emits a hover signal with the raw data from the grid point where the mouse is.
+ */
+void DisplayWidget::emitHover() {
+    if(frame) {
+        int row = cur_row;
+        int col = cur_col;
+
+        if(row == -1 || col == -1) {
+            return;
+        }
+
+        float ux = frame->ux.at(row, col);
+        float uy = frame->uy.at(row, col);
+        float density = frame->density.at(row, col);
+        float speed = sqrt(ux*ux + uy*uy);
+
+        auto s = QString("");
+        QTextStream stream(&s);
+        stream.setNumberFlags(QTextStream::ForceSign);
+        stream.setRealNumberNotation(QTextStream::FixedNotation);
+        stream << "ux = " << ux << ", uy = " << uy << ", speed = " << speed << ", density = " << density;
+
+        emit hover(stream.readAll());
+    }
+}
+
+/**
+ * @brief Handles mouse movements.
+ * @param event
+ */
+void DisplayWidget::mouseMoveEvent(QMouseEvent* event) {
+    int row =  getRow(event->y());
+    int col = getCol(event->x());
+
+    if(interactionMode == NONE || interactionMode == HOVER) {
+        interactionMode = HOVER;
+        cur_row = row;
+        cur_col = col;
+        emitHover();
+    }
+    else if(interactionMode == SELECT) {
+        cur_row = row;
+        cur_col = col;
+        update();
+    } else if(interactionMode == TOGGLE){
+        if(row != cur_row || col != cur_col) {
+            cur_row = row;
+            cur_col = col;
+            emit toggle(row, col);
+        }
+    }
+}
+
+/**
+ * @brief Handles mouse presses.
+ * @param event
+ */
 void DisplayWidget::mousePressEvent(QMouseEvent* event) {
-	emit mousePressed(event);
+    start_row = getRow(event->y());
+    start_col = getCol(event->x());
+    cur_row = start_row;
+    cur_col = start_col;
+
+    if(event->modifiers() == Qt::ShiftModifier) {
+        interactionMode = SELECT;
+        update();
+    } else {
+        interactionMode = TOGGLE;
+        emit toggle(cur_row, cur_col);
+    }
 }
 
+/**
+ * @brief Handles mouse releases.
+ * @param event
+ */
+void DisplayWidget::mouseReleaseEvent(QMouseEvent* event) {
+    if(interactionMode == SELECT) {
+        cur_row = getRow(event->y());
+        cur_col = getCol(event->x());
+        update();
+
+        int r1 = start_row;
+        int r2 = cur_row;
+        int c1 = start_col;
+        int c2 = cur_col;
+
+        int start_r = std::min({r1, r2});
+        int start_c = std::min({c1, c2});
+        int height = std::max({r1, r2}) - start_r + 1;
+        int width = std::max({c1, c2}) - start_c + 1;
+
+        if(height <= 1 || width <= 1)
+            return;
+
+        emit selected(start_r, start_c, height, width);
+        resizeGL(size().width(), size().height());
+        update();
+    }
+
+    interactionMode = NONE;
+}
+
+/**
+ * @brief DisplayWidget::getRow
+ * @param pixel         the y pixel of the mouse click
+ * @return the row in the simulation grid cooresponding to the clicked pixel
+ */
 int DisplayWidget::getRow(int pixel) {
 	// Determine drawing box coordinates.
 	float miny = range_y * MARGIN;
@@ -31,13 +153,7 @@ int DisplayWidget::getRow(int pixel) {
 	//float stepy = (maxy - miny) / frame->height;
 
 	double point = (((double)(pixel - vp_y_off) / vp_height * range_y) - miny) / (maxy - miny);
-	int index = point * frame->height;
-	/*qDebug() << "Pixel: " << pixel << ", Height: " << height();
-	qDebug() << "X Off: " << vp_x_off << ", VP Width: " << vp_width << ", Width: " << width();
-	qDebug() << "Y Off: " << vp_y_off << ", VP Height: " << vp_height << ", Height: " << height();
-	qDebug() << "range_x: " << range_x << ", range_y: " << range_y << ", stepy: " << stepy;
-	qDebug() << point;
-	qDebug() << index;*/
+    int index = point * frame->height;
 	if(point >= 0 && point <= 1) {
 		return index;
 	}
@@ -46,6 +162,11 @@ int DisplayWidget::getRow(int pixel) {
 	}
 }
 
+/**
+ * @brief DisplayWidget::getCol
+ * @param pixel         the x pixel of the mouse click
+ * @return the col in the simulation grid cooresponding to the clicked pixel
+ */
 int DisplayWidget::getCol(int pixel) {
 	// Determine drawing box coordinates.
 	float minx = range_x * MARGIN;
@@ -59,13 +180,7 @@ int DisplayWidget::getCol(int pixel) {
 	//float stepx = (maxx - minx) / frame->width;
 
 	double point = (((double)(pixel - vp_x_off) / vp_width * range_x) - minx) / (maxx - minx);
-	int index = point * frame->width;
-	/*qDebug() << "Pixel: " << pixel << ", Height: " << height();
-	qDebug() << "X Off: " << vp_x_off << ", VP Width: " << vp_width << ", Width: " << width();
-	qDebug() << "Y Off: " << vp_y_off << ", VP Height: " << vp_height << ", Height: " << height();
-	qDebug() << "range_x: " << range_x << ", range_y: " << range_y << ", stepy: " << stepy;
-	qDebug() << point;
-	qDebug() << index;*/
+    int index = point * frame->width;
 	if(point >= 0 && point <= 1) {
 		return index;
 	}
@@ -74,26 +189,41 @@ int DisplayWidget::getCol(int pixel) {
 	}
 }
 
+/**
+ * @brief Gives Qt a hint about the default size of this widget.
+ * @return
+ */
 QSize DisplayWidget::sizeHint() const
 {
     return QSize(400, 400);
 }
 
+/**
+ * @brief Initializes GL state.
+ */
 void DisplayWidget::initializeGL()
 {
 	//auto color = this->palette().color(QPalette::Background);
 	//qglClearColor(color);
-	qglClearColor(Qt::white);
+    qglClearColor(Qt::white);
 }
 
+/**
+ * @brief Calls OpenGL drawing functions.
+ */
 void DisplayWidget::paintGL()
 {
+    glMatrixMode(GL_MODELVIEW);
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
-	glTranslatef(0.0, 0.0, -5.0);
     draw();
 }
 
+/**
+ * @brief Handles resize/scale of view when the widget is resized.
+ * @param width
+ * @param height
+ */
 void DisplayWidget::resizeGL(int width, int height)
 {
 	if(!frame)
@@ -128,16 +258,21 @@ void DisplayWidget::resizeGL(int width, int height)
 		vp_y_off = (height - width / aspect_ratio) / 2;
 		vp_width = width;
 		vp_height = width / aspect_ratio;
-	}
-	glViewport(
-		vp_x_off,
-		vp_y_off,
-		vp_width,
-		vp_height);
+    }
+
+    qDebug() << "Resize" << this;/*
+    qDebug() << range_x << range_y;
+    qDebug() << vp_x_off << vp_y_off;
+    qDebug() << vp_width << vp_height;*/
 	
     glMatrixMode(GL_PROJECTION);
+    glViewport(
+        vp_x_off,
+        vp_y_off,
+        vp_width,
+        vp_height);
     glLoadIdentity();
-	glOrtho(0, range_x, range_y, 0, 1.0, 15.0);
+    glOrtho(0, range_x, range_y, 0, -1.0, 1.0);
 	glMatrixMode(GL_MODELVIEW);
 }
 
@@ -179,7 +314,16 @@ static void square(float x, float y, float w, float h){
     glEnd();
 }
 
+/**
+ * @brief Draws the vectors and heatmap based on the current Frame.
+ */
 void DisplayWidget::draw(){
+
+    qDebug() << "Draw" << this;/*
+    qDebug() << range_x << range_y;
+    qDebug() << vp_x_off << vp_y_off;
+    qDebug() << vp_width << vp_height;*/
+
 	// Determine drawing box coordinates.
 	float minx = range_x * MARGIN;
 	float maxx = range_x * (1 - MARGIN);
@@ -221,28 +365,96 @@ void DisplayWidget::draw(){
 		}
 	}
 	
-	
+    auto getHue = [](float n) -> int {
+        Q_ASSERT(n >= 0 && n <= 1);
+        return (int)(240 - n * 240);
+    };
+
 	// Draw the heat map.
 	int i = 0;
-	for(int xi = 0;xi < frame->width;xi++){
-		for(int yi = 0;yi < frame->height;yi++){
+    float maxDensity = 0;
+    float minDensity = 0;
+    float maxSpeed = 0;
+    float minSpeed = 0;
+    float maxUx = 0;
+    float minUx = 0;
+    float maxUy = 0;
+    float minUy = 0;
+
+
+    if(heatmapType == DENSITY) {
+        maxDensity = frame->density.max();
+        minDensity = frame->density.min();
+
+        if(maxDensity == minDensity) {
+            maxDensity += .01;
+        }
+    } else if(heatmapType == SPEED) {
+        maxSpeed = max_len;
+        minSpeed = min_len;
+
+        if(maxSpeed == minSpeed) {
+            maxSpeed += .01;
+        }
+    } else if(heatmapType == X_VEL) {
+        maxUx = frame->ux.max();
+        minUx = frame->ux.min();
+
+        if(maxUx == minUx) {
+            maxUx += .01;
+        }
+    } else if(heatmapType == Y_VEL) {
+        maxUy = frame->uy.max();
+        minUy = frame->uy.min();
+
+        if(maxUy == minUy) {
+            maxUy += .01;
+        }
+    } else {
+        Q_ASSERT(false);
+    }
+
+    for(int xi = 0;xi < frame->width;xi++){
+        for(int yi = 0;yi < frame->height;yi++, i++){
+            int hue;
 			float x = minx + stepx  * xi + stepx / 2;
-			float y = miny + stepy  * yi + stepy / 2;
-			float len = lengths[i];
-			
+            float y = miny + stepy  * yi + stepy / 2;
 			
 			if(!frame->getBarrier(yi, xi)){
     			// If it's not a barrier, draw a color square.
-				int hue = 240 - len / max_len * 240;
-				qglColor(QColor::fromHsv(hue, 240, 200));
-				square(x, y, stepx, stepy);
+                if(heatmapType == DENSITY) {
+                    auto density = frame->density[i];
+                    hue = getHue((density - minDensity) / (maxDensity - minDensity));
+                } else if(heatmapType == SPEED) {
+                    float len = lengths[i];
+                    hue = getHue((len - minSpeed) / (maxSpeed - minSpeed));
+                } else if(heatmapType == X_VEL) {
+                    float ux = frame->ux[i];
+                    hue = getHue((ux - minUx) / (maxUx - minUx));
+                } else if(heatmapType == Y_VEL) {
+                    float uy = frame->uy[i];
+                    hue = getHue((uy - minUy) / (maxUy - minUy));
+                } else {
+                    Q_ASSERT(false);
+                    hue = 0;
+                }
+
+                if(interactionMode == SELECT &&
+                        xi >= std::min({cur_col, start_col}) &&
+                        xi <= std::max({cur_col, start_col}) &&
+                        yi >= std::min({cur_row, start_row}) &&
+                        yi <= std::max({cur_row, start_row})) {
+                    qglColor(QColor::fromHsv(hue, 160, 240));
+                } else {
+                    qglColor(QColor::fromHsv(hue, 240, 200));
+                }
+                square(x, y, stepx, stepy);
 			}
 			else{
 				// If it's a barrier, draw gray.
 				qglColor(Qt::gray);
 				square(x, y, stepx, stepy);
 			}
-			i++;
 		}
 	}
 	
@@ -266,11 +478,36 @@ void DisplayWidget::draw(){
 	}
 }
 
+/**
+ * @brief Sets a new frame.
+ * @param frame
+ */
 void DisplayWidget::setData(const Frame& frame){
-	this->frame = frame;
+    auto oldFrame = this->frame;
+    this->frame = frame;
+    if(!oldFrame || oldFrame->height != frame.height || oldFrame->width != frame.width) {
+        resizeGL(width(), height());
+        interactionMode = NONE;
+    }
+
+    if(interactionMode == HOVER) {
+        emitHover();
+    }
 }
 
+/**
+ * @brief Disables or enables the drawing of vectors.
+ * @param b
+ */
 void DisplayWidget::setDrawVectors(bool b) {
 	_drawVectors = b;
 	update();
+}
+
+/**
+ * @brief Changes the heatmap type.
+ * @param t
+ */
+void DisplayWidget::setHeatmapType(HeatmapType t) {
+    heatmapType = t;
 }

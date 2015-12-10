@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDataStream>
 #include <QFile>
 #include <QFileDialog>
@@ -25,9 +26,13 @@
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+    QFont font("Monospace");
+    font.setStyleHint(QFont::TypeWriter);
+    statusBar()->setFont(font);
+
 	setupMenu();
 	setupUI();
-	setWindowTitle(tr("Vizualizer"));
+    setWindowTitle(tr("Vizualizer"));
 }
 
 /**
@@ -40,55 +45,88 @@ void MainWindow::setFrame(int frameNum){
 		_mode = RUN;
 	}
 
-	// Ignore requests to set frame higher than the number of frames we have.
-	while(frameNum >= (int)_frames.size()) {
-		if(_state) {
-			_frames.push_back(_state->getFrame());
+    // Generate frames if we don't have enough.
+    while(frameNum >= _state->numFrames()) {
+        if(_state) {
 			_state->step();
-		} else
+        } else {
 			return;
+        }
 	}
 
 	_curFrame = frameNum;
-	_slider->setMaximum(_frames.size());
+    _slider->setMaximum(_state->numFrames());
 	_slider->setValue(_curFrame + 1);
-	_displayWidget->setData(_frames[frameNum]);
+    _displayWidget->setData(_state->getFrame(frameNum));
 
-	_displayWidget->resizeGL(_displayWidget->width(), _displayWidget->height());
-	_displayWidget->update();
+    _displayWidget->updateGL();
+    updateSubdisplay();
 }
 
+/**
+ * @brief Sets a new SimState an resets the state of MainWindow for a new state.
+ * @param s new SimState
+ */
 void MainWindow::setState(SimState s) {
 	_play = false;
 	_playTimer.stop();
 
-	_curFrame = 0;
-	_frames.clear();
+    _curFrame = 0;
 
 	_slider->setMaximum(1);
 	_slider->setMinimum(0);
 	_slider->setSliderPosition(_slider->maximum());
 
 	_mode = EDIT;
-	_state = s;
-	_frames.push_back(_state->getFrame());
+	_saveInitialAction->setEnabled(true);
+
+    _subdisplayWidget->hide();
+
+    _state = s;
 	setFrame(0);
 }
 
+/**
+ * @brief Creates the widget that holds controls on the right
+ * @param parent    parent widget
+ * @return the initialized config widget
+ */
 QWidget* MainWindow::setupConfigWidget(QWidget* parent) {
-	auto formLayout = new QFormLayout;
+    auto formLayout = new QFormLayout;
+    formLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    formLayout->setSizeConstraint(QLayout::SetNoConstraint);
 
 	auto vectorCheckbox = new QCheckBox();
 	vectorCheckbox->setChecked(true);
 	connect(vectorCheckbox, SIGNAL(toggled(bool)),
 			this, SLOT(vectorToggled(bool)));
 
+    auto heatmapComboBox = new QComboBox();
+    heatmapComboBox->addItems(QStringList{"Density", "Speed", "X Velocity", "Y Velocity"});
+    heatmapComboBox->setCurrentIndex(1);
+    connect(heatmapComboBox, SIGNAL(currentIndexChanged(QString)), this, SLOT(heatmapChanged(QString)));
+
+
+    _subdisplayWidget = new DisplayWidget;
+    _subdisplayWidget->hide();
+    connect(_subdisplayWidget, SIGNAL(hover(QString)), this, SLOT(displayHover(QString)));
+
 	formLayout->addRow("Show Vectors:", vectorCheckbox);
+    formLayout->addRow("Heatmap:", heatmapComboBox);
+
+    auto vbox = new QVBoxLayout;
+    vbox->addLayout(formLayout, 0);
+    vbox->addWidget(_subdisplayWidget, 1);
+
 	auto configWidget = new QWidget(parent);
-	configWidget->setLayout(formLayout);
+    configWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    configWidget->setLayout(vbox);
 	return configWidget;
 }
 
+/**
+ * @brief Adds items to menu and connects slots to handle them.
+ */
 void MainWindow::setupMenu(){
 	auto menuBar = this->menuBar();
 	
@@ -97,28 +135,32 @@ void MainWindow::setupMenu(){
 	exitAction->setStatusTip(tr("Exit application"));
 	connect(exitAction, SIGNAL(triggered()), this, SLOT(close()));
 
-	QAction* newAction = new QAction(tr("&New"), this);
-	newAction->setStatusTip(tr("Start new simulation"));
+    QAction* newAction = new QAction(tr("&New"), this);
 	connect(newAction, SIGNAL(triggered()), this, SLOT(newTriggered()));
 
-	_editAction = new QAction(tr("&Edit"), this);
-	_editAction->setStatusTip(tr("Edit (and reset) this simulation"));
+    _editAction = new QAction(tr("&Edit"), this);
 	connect(_editAction, SIGNAL(triggered()), this, SLOT(editTriggered()));
-	_editAction->setEnabled(false);
+    _editAction->setEnabled(false);
 
-	_saveInitialAction = new QAction(tr("Save &Initial State"), this);
-	_saveInitialAction->setStatusTip(tr("Save initial condition of the current simulation"));
-	connect(_saveInitialAction, SIGNAL(triggered()), this, SLOT(saveInitialTriggered()));
-	_saveInitialAction->setEnabled(false);
+    _saveInitialAction = new QAction(tr("Save Initial State"), this);
+    connect(_saveInitialAction, SIGNAL(triggered()), this, SLOT(saveInitialTriggered()));
+    _saveInitialAction->setEnabled(false);
+
+    QAction* loadInitialAction = new QAction(tr("Load Initial State"), this);
+    connect(loadInitialAction, SIGNAL(triggered()), this, SLOT(loadInitialTriggered()));
 
 	auto fileMenu = menuBar->addMenu(tr("&File"));
 	fileMenu->addAction(newAction);
 	fileMenu->addAction(_editAction);
 	fileMenu->addAction(_saveInitialAction);
+    fileMenu->addAction(loadInitialAction);
 	fileMenu->addSeparator();
 	fileMenu->addAction(exitAction);
 }
 
+/**
+ * @brief Sets up widget hierarchy and connects slots.
+ */
 void MainWindow::setupUI(){
 	// Create slider and attach handler.
 	_slider = new QSlider(Qt::Horizontal);
@@ -159,9 +201,13 @@ void MainWindow::setupUI(){
 			this, SLOT(playEvent()));
 
 	// Connect mouse press event from display widget to this object so we can add barriers
-	// when the user clicks.
-	connect(_displayWidget, SIGNAL(mousePressed(QMouseEvent*)),
-			this, SLOT(displayMousePressed(QMouseEvent*)));
+    // when the user clicks.
+    connect(_displayWidget, SIGNAL(hover(QString)),
+            this, SLOT(displayHover(QString)));
+    connect(_displayWidget, SIGNAL(selected(int,int,int,int)),
+            this, SLOT(subdiplaySelected(int,int,int,int)));
+    connect(_displayWidget, SIGNAL(toggle(int,int)),
+            this, SLOT(displayToggle(int,int)));
 
 	auto centralWidget = new QWidget;
 	centralWidget->setLayout(vbox);
@@ -169,35 +215,106 @@ void MainWindow::setupUI(){
 }
 
 /**
- * @brief Slot called when the display widget is clicked
- * @param event mouse event
+ * @brief Updates subdisplay when a new frame is set.
  */
-void MainWindow::displayMousePressed(QMouseEvent *event) {
-	int col = _displayWidget->getCol(event->x());
-	int row = _displayWidget->getRow(event->y());
+void MainWindow::updateSubdisplay() {
+    if(_subdisplayWidget->isHidden())
+        return;
 
-	// Click was not in grid.
-	if(row < 0 || col < 0)
-		return;
-
-	if(_state && (unsigned long)_curFrame == _frames.size() - 1)
-		_state->toggleBarrier(row, col);
-
-	_displayWidget->update();
+    static Frame f = _state->getFrame(_curFrame).getSubframe(subdisplayRow, subdisplayCol, subdisplayH, subdisplayW);
+    f = _state->getFrame(_curFrame).getSubframe(subdisplayRow, subdisplayCol, subdisplayH, subdisplayW);
+    _subdisplayWidget->setData(f);
+    _subdisplayWidget->update();
 }
 
+/**
+ * @brief Called by DisplayWidget instances to show raw data.
+ * @param raw data string
+ */
+void MainWindow::displayHover(QString s) {
+    statusBar()->showMessage(s);
+}
+
+/**
+ * @brief Called by DisplayWidget when a barrier is clicked.
+ * @param row
+ * @param col
+ */
+void MainWindow::displayToggle(int row, int col) {
+    // Click was not in grid.
+    if(row < 0 || col < 0)
+        return;
+
+    if(_state && _curFrame == _state->numFrames() - 1) {
+        qDebug() << "row,col: " << row << "," << col;
+        _state->toggleBarrier(row, col);
+    }
+
+    _displayWidget->update();
+    updateSubdisplay();
+}
+
+/**
+ * @brief Called when the Edit menu option is clicked.
+ */
 void MainWindow::editTriggered() {
-	setState(*_savedState);
+    setState(_state->initialState());
 }
 
+/**
+ * @brief Called when heatmap dropdown is changed
+ * @param value of heatmap dropdown
+ */
+void MainWindow::heatmapChanged(QString s) {
+    if(s == "Density") {
+        _displayWidget->setHeatmapType(DisplayWidget::HeatmapType::DENSITY);
+        _subdisplayWidget->setHeatmapType(DisplayWidget::HeatmapType::DENSITY);
+    } else if(s == "Speed") {
+        _displayWidget->setHeatmapType(DisplayWidget::HeatmapType::SPEED);
+        _subdisplayWidget->setHeatmapType(DisplayWidget::HeatmapType::SPEED);
+    } else if(s == "X Velocity") {
+        _displayWidget->setHeatmapType(DisplayWidget::HeatmapType::X_VEL);
+        _subdisplayWidget->setHeatmapType(DisplayWidget::HeatmapType::X_VEL);
+    } else if(s == "Y Velocity") {
+        _displayWidget->setHeatmapType(DisplayWidget::HeatmapType::Y_VEL);
+        _subdisplayWidget->setHeatmapType(DisplayWidget::HeatmapType::Y_VEL);
+    }
+
+    _displayWidget->update();
+    _subdisplayWidget->update();
+}
+
+/**
+ * @brief Called when Load is clicked in menu.
+ */
+void MainWindow::loadInitialTriggered() {
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                                    tr("Load Initial State"),
+                                                    "",
+                                                    tr("Initial State (*.istate)"));
+
+    QFile file(fileName);
+    if(file.open(QFile::ReadOnly)) {
+        QDataStream stream(&file);
+        setState(SimState::load(stream));
+        file.close();
+    }
+}
+
+/**
+ * @brief Called when New is clicked in menu.
+ */
 void MainWindow::newTriggered() {
+
 	NewDialog* newDialog = new NewDialog();
-	if(newDialog->exec()) {
-		SimState s(newDialog->height, newDialog->width);
-		_savedState.reset();
-		setState(s);
+    if(newDialog->exec()) {
+        // Hide the subdisplay because a new selection must be made for the new state.
+        _subdisplayWidget->hide();
+
+        SimState s(newDialog->height, newDialog->width);
+        setState(s);
 	}
-	delete newDialog;
+    delete newDialog;
 }
 
 /**
@@ -212,7 +329,7 @@ void MainWindow::pauseReleased(){
  */
 void MainWindow::playEvent(){
 	if(_play) {
-		setFrame(_curFrame + _skip);
+        setFrame(_curFrame + _skip);
 	}
 }
 
@@ -222,10 +339,7 @@ void MainWindow::playEvent(){
 void MainWindow::playReleased(){
 	if(_state) {
 		_mode = RUN;
-		if(!_savedState) {
-			_savedState = _state;
-			_editAction->setEnabled(true);
-		}
+        _editAction->setEnabled(true);
 		_play = true;
 		_playTimer.start(100);
 	}
@@ -244,11 +358,7 @@ void MainWindow::saveInitialTriggered() {
 	QFile file(fileName);
 	if(file.open(QFile::WriteOnly)) {
 		QDataStream stream(&file);
-		if(_mode == EDIT) {
-			_state->save(stream);
-		} else if(_mode == RUN) {
-			_savedState->save(stream);
-		}
+        _state->initialState().save(stream);
 		file.close();
 	}
 
@@ -264,8 +374,33 @@ void MainWindow::sliderMoved(int val) {
 }
 
 /**
+ * @brief Called when a subdisplahy is selected in the main DisplayWidget
+ * @param row
+ * @param col
+ * @param height
+ * @param width
+ */
+void MainWindow::subdiplaySelected(int row, int col, int height, int width) {
+    if(row < 0 || col < 0 || height < 2 || width < 2)
+        return;
+
+    subdisplayRow = row;
+    subdisplayCol = col;
+    subdisplayH = height;
+    subdisplayW = width;
+
+    _subdisplayWidget->show();
+    updateSubdisplay();
+    _subdisplayWidget->paintGL();
+    _subdisplayWidget->resize(_subdisplayWidget->size());
+    _subdisplayWidget->resizeGL(_subdisplayWidget->width() - 1, _subdisplayWidget->height());
+    _subdisplayWidget->paintGL();
+}
+
+/**
  * @brief Slot called when vector checkbox is toggled.
  */
 void MainWindow::vectorToggled(bool checked) {
-	_displayWidget->setDrawVectors(checked);
+    _displayWidget->setDrawVectors(checked);
+    _subdisplayWidget->setDrawVectors(checked);
 }

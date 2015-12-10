@@ -39,7 +39,7 @@ class MainWindow : public QMainWindow{
 	int _curFrame = 0;
 
 	// Set the number of frames to skip forward when animating.
-	int _skip = 10;
+    int _skip = 1;
 
 	/**
 	 * Mode of operation.
@@ -47,25 +47,30 @@ class MainWindow : public QMainWindow{
 	 * EDIT    -	State loaded but not yet .step()'ed.
 	 * RUN     -	State loaded and .step()'ed.
 	 */
-	enum Mode {STARTED, EDIT, RUN} _mode = STARTED;
-
-	// Copy of current _state, without .step() ever having been called.
-	boost::optional<SimState> _savedState;
+    enum Mode {STARTED, EDIT, RUN} _mode = STARTED;
 
 	boost::optional<SimState> _state;
 
+    // timer used to fire the animation event
 	QTimer _playTimer;
 
-	QSlider* _slider = nullptr;
-	std::vector<Frame> _frames;
+    // frame slider
+    QSlider* _slider = nullptr;
 
 	QAction* _editAction;
-	QAction* _saveInitialAction;
+    QAction* _saveInitialAction;
 
-	QWidget* setupCentralWidget();
 	QWidget* setupConfigWidget(QWidget* parent = nullptr);
 	void setupMenu();
-	void setupUI();
+    void setupUI();
+
+    int subdisplayRow;
+    int subdisplayCol;
+    int subdisplayH;
+    int subdisplayW;
+    DisplayWidget* _subdisplayWidget;
+
+    void updateSubdisplay();
 	
 public:
 	MainWindow(QWidget* parent = nullptr);
@@ -74,15 +79,19 @@ public:
 	void setState(SimState);
 	
 private slots:
-	void displayMousePressed(QMouseEvent* event);
-	void editTriggered();
-	void newTriggered();
-	void playReleased();
-	void pauseReleased();
-	void playEvent();
-	void saveInitialTriggered();
-	void sliderMoved(int);
-	void vectorToggled(bool checked);
+    void displayHover(QString);
+    void displayToggle(int row, int col);
+    void editTriggered();
+    void heatmapChanged(QString s);
+    void loadInitialTriggered();
+    void newTriggered();
+    void playReleased();
+    void pauseReleased();
+    void playEvent();
+    void saveInitialTriggered();
+    void sliderMoved(int);
+    void subdiplaySelected(int x, int y, int width, int height);
+    void vectorToggled(bool checked);
 };
 
 #endif // MAIN_WINDOW_HPP
