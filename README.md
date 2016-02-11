@@ -4,6 +4,6 @@ My senior project: a 2D fluid simulator using the Lattice Boltzmann Method in C+
 
 To build (on Debian):
 
-    sudo apt-get libqt4-dev libqt4-opengl-dev libboost-dev
+    sudo apt-get qtbase5-dev libqt5opengl5-dev libboost-dev
     qmake .
     make
